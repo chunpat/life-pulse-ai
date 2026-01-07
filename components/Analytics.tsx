@@ -2,7 +2,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
 import { LogEntry } from '../types';
-import { getDailyInsight } from '../services/geminiService';
+import { getDailyInsight } from '../services/qwenService';
 
 interface AnalyticsProps {
   logs: LogEntry[];

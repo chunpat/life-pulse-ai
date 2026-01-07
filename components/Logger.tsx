@@ -1,7 +1,20 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { parseLifeLog } from '../services/geminiService';
+import { parseLifeLog } from '../services/qwenService';
 import { LogEntry } from '../types';
+
+// 兼容性 UUID 生成函数
+function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // 备用 UUID 生成方法
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
 
 interface LoggerProps {
   onAddLog: (entry: LogEntry) => void;
@@ -11,6 +24,7 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog }) => {
   const [inputText, setInputText] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
   const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
@@ -49,7 +63,7 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog }) => {
     try {
       const parsed = await parseLifeLog(inputText);
       const newEntry: LogEntry = {
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         timestamp: Date.now(),
         rawText: inputText,
         activity: parsed.activity || '未知活动',
@@ -60,8 +74,11 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog }) => {
       };
       onAddLog(newEntry);
       setInputText('');
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 2000);
     } catch (err) {
-      alert("AI 解析失败，请尝试更简洁的表达。");
+      console.error("提交失败:", err);
+      alert(`AI 解析失败: ${err.message}`);
     } finally {
       setIsProcessing(false);
     }
@@ -88,16 +105,22 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog }) => {
           >
             <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
           </button>
-
-          <button
-            onClick={handleSubmit}
-            disabled={!inputText.trim() || isProcessing}
-            className={`px-8 py-3 rounded-full font-bold text-white transition-all ${
-              isProcessing ? 'bg-slate-400 cursor-wait' : 'bg-indigo-600 hover:bg-indigo-700 active:scale-95 shadow-lg shadow-indigo-100'
-            }`}
-          >
-            {isProcessing ? 'AI 分析中...' : '记录一下'}
-          </button>
+          <div className="relative">
+            {showSuccess && (
+               <div className="absolute left-1/2 -top-12 -translate-x-1/2 flex flex-col items-center pointer-events-none animate-bounce">
+                  <span className="text-3xl font-bold text-indigo-500 drop-shadow-sm">+1</span>
+               </div>
+            )}
+            <button
+              onClick={handleSubmit}
+              disabled={!inputText.trim() || isProcessing}
+              className={`px-8 py-3 rounded-full font-bold text-white transition-all ${
+                isProcessing ? 'bg-slate-400 cursor-wait' : 'bg-indigo-600 hover:bg-indigo-700 active:scale-95 shadow-lg shadow-indigo-100'
+              }`}
+            >
+              {isProcessing ? 'AI 分析中...' : '记录一下'}
+            </button>
+          </div>
         </div>
       </div>
 
