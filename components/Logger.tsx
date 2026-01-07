@@ -52,16 +52,16 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog }) => {
         id: crypto.randomUUID(),
         timestamp: Date.now(),
         rawText: inputText,
-        activity: parsed.activity || 'Activity',
+        activity: parsed.activity || '未知活动',
         category: parsed.category || 'Other',
         durationMinutes: parsed.durationMinutes || 0,
-        mood: parsed.mood || 'Neutral',
+        mood: parsed.mood || '中性',
         importance: (parsed.importance as any) || 3,
       };
       onAddLog(newEntry);
       setInputText('');
     } catch (err) {
-      alert("AI interpretation failed. Please try a simpler phrase.");
+      alert("AI 解析失败，请尝试更简洁的表达。");
     } finally {
       setIsProcessing(false);
     }
@@ -73,7 +73,7 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog }) => {
         <textarea
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
-          placeholder="What did you do just now? (e.g., 'Worked on coding for 2 hours, felt really productive!')"
+          placeholder="刚才做了什么？（例如：'写代码 2 小时，感觉非常高效！'）"
           className="w-full bg-transparent border-none focus:ring-0 text-lg text-slate-800 placeholder:text-slate-400 min-h-[120px] resize-none"
         />
         
@@ -84,6 +84,7 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog }) => {
             className={`p-3 rounded-full transition-all ${
               isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-slate-200 text-slate-600'
             }`}
+            title={isListening ? "停止录音" : "语音录入"}
           >
             <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
           </button>
@@ -95,16 +96,16 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog }) => {
               isProcessing ? 'bg-slate-400 cursor-wait' : 'bg-indigo-600 hover:bg-indigo-700 active:scale-95 shadow-lg shadow-indigo-100'
             }`}
           >
-            {isProcessing ? 'Thinking...' : 'Log Entry'}
+            {isProcessing ? 'AI 分析中...' : '记录一下'}
           </button>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <QuickTip text="Spent 30 mins at gym" onClick={setInputText} />
-        <QuickTip text="Coding for 3 hours" onClick={setInputText} />
-        <QuickTip text="Had a nice coffee with Lily" onClick={setInputText} />
-        <QuickTip text="Reading book for 20m" onClick={setInputText} />
+        <QuickTip text="在健身房锻炼了 30 分钟" onClick={setInputText} />
+        <QuickTip text="沉浸式写代码 3 小时" onClick={setInputText} />
+        <QuickTip text="和莉莉喝了杯咖啡，很开心" onClick={setInputText} />
+        <QuickTip text="读了 20 分钟书" onClick={setInputText} />
       </div>
     </div>
   );

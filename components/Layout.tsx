@@ -14,7 +14,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewCha
       {/* Header */}
       <header className="p-6 pt-10">
         <h1 className="text-3xl font-bold text-slate-800 tracking-tight">LifePulse <span className="text-indigo-600">AI</span></h1>
-        <p className="text-slate-500 text-sm mt-1">Capture your life, discover your patterns.</p>
+        <p className="text-slate-500 text-sm mt-1">捕捉生活点滴，发现时间规律。</p>
       </header>
 
       {/* Main Content */}
@@ -27,8 +27,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewCha
         <NavButton 
           active={currentView === ViewMode.TIMELINE} 
           onClick={() => onViewChange(ViewMode.TIMELINE)}
-          // Removed invalid 'icon' prop that was causing a TypeScript error. The icon is passed as children.
-          label="History"
+          label="回顾"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
         </NavButton>
@@ -45,7 +44,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewCha
         <NavButton 
           active={currentView === ViewMode.ANALYTICS} 
           onClick={() => onViewChange(ViewMode.ANALYTICS)}
-          label="Analytics"
+          label="分析"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
         </NavButton>
