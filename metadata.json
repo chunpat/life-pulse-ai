@@ -1,0 +1,7 @@
+{
+  "name": "LifePulse AI Daily Logger",
+  "description": "A frictionless life-logging tool that uses Gemini AI to transform voice and text notes into structured daily insights and time-distribution analysis.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
