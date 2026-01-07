@@ -24,7 +24,7 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog }) => {
   const [inputText, setInputText] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
+  const [permissionDenied, setPermissionDenied] = useState(false);
   const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
@@ -39,19 +39,37 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog }) => {
         const transcript = event.results[0][0].transcript;
         setInputText(prev => (prev + ' ' + transcript).trim());
         setIsListening(false);
+        setPermissionDenied(false);
       };
 
-      recognitionRef.current.onerror = () => setIsListening(false);
+      recognitionRef.current.onerror = (event: any) => {
+        console.error("Speech recognition error", event.error);
+        setIsListening(false);
+        if (event.error === 'not-allowed' || event.error === 'permission-denied') {
+          setPermissionDenied(true);
+        }
+      };
+
       recognitionRef.current.onend = () => setIsListening(false);
     }
   }, []);
 
   const toggleListening = () => {
+    // 重置权限错误状态，允许用户重试
+    if (permissionDenied) {
+      setPermissionDenied(false);
+    }
+
     if (isListening) {
       recognitionRef.current?.stop();
     } else {
       setIsListening(true);
-      recognitionRef.current?.start();
+      try {
+        recognitionRef.current?.start();
+      } catch (e) {
+        console.error(e);
+        setIsListening(false);
+      }
     }
   };
 
@@ -74,8 +92,6 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog }) => {
       };
       onAddLog(newEntry);
       setInputText('');
-      setShowSuccess(true);
-      setTimeout(() => setShowSuccess(false), 2000);
     } catch (err) {
       console.error("提交失败:", err);
       alert(`AI 解析失败: ${err.message}`);
@@ -95,22 +111,30 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog }) => {
         />
         
         <div className="flex justify-between items-center mt-4">
-          <button 
-            type="button"
-            onClick={toggleListening}
-            className={`p-3 rounded-full transition-all ${
-              isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-slate-200 text-slate-600'
-            }`}
-            title={isListening ? "停止录音" : "语音录入"}
-          >
-            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
-          </button>
           <div className="relative">
-            {showSuccess && (
-               <div className="absolute left-1/2 -top-12 -translate-x-1/2 flex flex-col items-center pointer-events-none animate-bounce">
-                  <span className="text-3xl font-bold text-indigo-500 drop-shadow-sm">+1</span>
-               </div>
+            <button 
+              type="button"
+              onClick={toggleListening}
+              className={`p-3 rounded-full transition-all ${
+                isListening 
+                  ? 'bg-red-500 text-white animate-pulse' 
+                  : permissionDenied 
+                    ? 'bg-red-50 text-red-400 ring-2 ring-red-100' 
+                    : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
+              }`}
+              title={isListening ? "停止录音" : "语音录入"}
+            >
+              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+            </button>
+            {permissionDenied && (
+              <div className="absolute top-full left-0 mt-2 w-max max-w-[200px] bg-red-50 text-red-500 text-xs p-2 rounded-lg border border-red-100 shadow-sm z-10 animate-in fade-in zoom-in-95 duration-200">
+                <p className="font-bold mb-1">无法通过语音录入</p>
+                请点击地址栏的 🔒 或设置图标开启麦克风权限，然后点击此按钮重试。
+              </div>
             )}
+          </div>
+
+          <div className="relative">
             <button
               onClick={handleSubmit}
               disabled={!inputText.trim() || isProcessing}

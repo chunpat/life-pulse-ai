@@ -12,6 +12,7 @@ const App: React.FC = () => {
   const [view, setView] = useState<ViewMode>(ViewMode.LOGGER);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [newLogAdded, setNewLogAdded] = useState(false);
 
   // Load logs on mount
   useEffect(() => {
@@ -35,6 +36,8 @@ const App: React.FC = () => {
 
   const addLog = useCallback((entry: LogEntry) => {
     setLogs(prev => [entry, ...prev]);
+    setNewLogAdded(true);
+    setTimeout(() => setNewLogAdded(false), 1000); // 1秒后重置
   }, []);
 
   const deleteLog = useCallback((id: string) => {
@@ -42,7 +45,7 @@ const App: React.FC = () => {
   }, []);
 
   return (
-    <Layout currentView={view} onViewChange={setView}>
+    <Layout currentView={view} onViewChange={setView} newLogAdded={newLogAdded}>
       {view === ViewMode.LOGGER && (
         <Logger onAddLog={addLog} />
       )}

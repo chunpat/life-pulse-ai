@@ -82,32 +82,34 @@ const Analytics: React.FC<AnalyticsProps> = ({ logs }) => {
       <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm">
         <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-6">时间分配</h3>
         {categoryData.length > 0 ? (
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={categoryData}
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {categoryData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                  formatter={(value: number) => [`${value} 分钟`, '耗时']}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+          <div className="flex flex-col">
+            <div className="h-56 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={categoryData}
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {categoryData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                    formatter={(value: number) => [`${value} 分钟`, '耗时']}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
             
-            <div className="grid grid-cols-2 gap-2 mt-4">
+            <div className="grid grid-cols-2 gap-3 mt-4">
               {categoryData.map((entry, index) => (
                 <div key={entry.name} className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
-                  <span className="text-[10px] font-semibold text-slate-500 uppercase">{entry.name}: {entry.value}分</span>
+                  <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
+                  <span className="text-xs font-medium text-slate-600">{entry.name}: {entry.value}分</span>
                 </div>
               ))}
             </div>
