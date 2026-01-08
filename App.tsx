@@ -5,8 +5,7 @@ import Logger from './components/Logger';
 import History from './components/History';
 import Analytics from './components/Analytics';
 import { Layout } from './components/Layout';
-
-const STORAGE_KEY = 'lifepulse_logs_v1';
+import { storageService } from './services/storageService';
 
 const App: React.FC = () => {
   const [view, setView] = useState<ViewMode>(ViewMode.LOGGER);
@@ -16,32 +15,24 @@ const App: React.FC = () => {
 
   // Load logs on mount
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        setLogs(JSON.parse(saved));
-      } catch (e) {
-        console.error("Failed to load logs");
-      }
-    }
-    setIsLoading(false);
+    const fetchLogs = async () => {
+      const data = await storageService.getLogs();
+      setLogs(data);
+      setIsLoading(false);
+    };
+    fetchLogs();
   }, []);
 
-  // Save logs on change
-  useEffect(() => {
-    if (!isLoading) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(logs));
-    }
-  }, [logs, isLoading]);
-
-  const addLog = useCallback((entry: LogEntry) => {
+  const addLog = useCallback(async (entry: LogEntry) => {
     setLogs(prev => [entry, ...prev]);
+    await storageService.saveLog(entry);
     setNewLogAdded(true);
     setTimeout(() => setNewLogAdded(false), 1000); // 1秒后重置
   }, []);
 
-  const deleteLog = useCallback((id: string) => {
+  const deleteLog = useCallback(async (id: string) => {
     setLogs(prev => prev.filter(log => log.id !== id));
+    await storageService.deleteLog(id);
   }, []);
 
   return (

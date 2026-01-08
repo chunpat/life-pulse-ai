@@ -25,9 +25,16 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog }) => {
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
+  const [isWeChat, setIsWeChat] = useState(false);
   const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
+    // 检测是否在微信环境中
+    const ua = window.navigator.userAgent.toLowerCase();
+    if (ua.indexOf('micromessenger') !== -1) {
+      setIsWeChat(true);
+    }
+
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (SpeechRecognition) {
       recognitionRef.current = new SpeechRecognition();
@@ -129,7 +136,11 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog }) => {
             {permissionDenied && (
               <div className="absolute top-full left-0 mt-2 w-max max-w-[200px] bg-red-50 text-red-500 text-xs p-2 rounded-lg border border-red-100 shadow-sm z-10 animate-in fade-in zoom-in-95 duration-200">
                 <p className="font-bold mb-1">无法通过语音录入</p>
-                请点击地址栏的 🔒 或设置图标开启麦克风权限，然后点击此按钮重试。
+                {isWeChat ? (
+                  <span>检测到您正在使用微信浏览器。微信 iOS 版会拦截网页自带的录音功能，请点击右上角选择<b>“在 Safari 中打开”</b>即可正常使用。</span>
+                ) : (
+                  <span>请点击地址栏的 🔒 或设置图标开启麦克风权限，然后点击此按钮重试。</span>
+                )}
               </div>
             )}
           </div>
