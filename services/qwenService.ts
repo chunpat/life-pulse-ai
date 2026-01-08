@@ -4,6 +4,7 @@ import { LogEntry } from '../types';
 // Use polyfilled process.env from vite define or import.meta.env
 // The vite config needs to be updated to expose DASHSCOPE_API_KEY
 const apiKey = process.env.DASHSCOPE_API_KEY || '';
+const modelName = process.env.QWEN_MODEL || 'qwen-plus';
 
 const client = new OpenAI({
   apiKey: apiKey,
@@ -17,7 +18,7 @@ export const parseLifeLog = async (text: string): Promise<Partial<LogEntry>> => 
   }
 
   const response = await client.chat.completions.create({
-    model: "qwen-plus",
+    model: modelName,
     messages: [
       {
         role: "system",
@@ -85,7 +86,7 @@ export const getDailyInsight = async (logs: LogEntry[]): Promise<string> => {
   const logSummary = logs.map(l => `${l.activity} (耗时 ${l.durationMinutes}分钟, 类别 ${l.category})`).join(', ');
   
   const response = await client.chat.completions.create({
-    model: "qwen-plus",
+    model: modelName,
     messages: [
        {
         role: "user",

@@ -52,6 +52,10 @@ npm install
 ```env
 # 请将 <YOUR_API_KEY> 替换为你实际的阿里云 API Key
 DASHSCOPE_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx
+
+# 可选：指定使用的模型 (默认使用 qwen-plus)
+# 可选值: qwen-plus, qwen-plus-2025-12-01, qwen-turbo 等
+QWEN_MODEL=qwen-plus
 ```
 
 ### 5. 启动项目
