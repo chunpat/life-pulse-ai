@@ -142,7 +142,7 @@ const App: React.FC = () => {
       onLogout={handleLogout}
     >
       {view === ViewMode.LOGGER && (
-        <Logger onAddLog={addLog} />
+        <Logger onAddLog={addLog} userId={user.id} />
       )}
       {view === ViewMode.TIMELINE && (
         <History logs={logs} onDelete={deleteLog} onUpdate={updateLog} />

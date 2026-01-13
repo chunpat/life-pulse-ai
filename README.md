@@ -1,107 +1,103 @@
 # LifePulse AI - 智能生活记录助手
 
-LifePulse AI 是一个基于 Web 的智能生活日志应用，可以帮助你轻松记录日常活动，并利用 AI 分析你的时间分配、情绪状态和生活重心。
+LifePulse AI 是一个基于 AI 和 Web 技术的智能生活日志应用。它通过自然语言处理技术，帮助你轻松记录日常活动，并生成多维度的可视化分析与 AI 生活洞察。
 
-本项目针对中国大陆网络环境进行了优化，替换了所有受限资源，并集成了阿里云通义千问 (Qwen) 大模型。
+## 🌟 核心功能
 
-## 主要功能
+- **智能语音/文本录入**: 随手记下一句话，AI 自动提取活动名称、分类（工作、健康、琐事等）、时长、心情及重要程度。
+- **全能历史回顾**: 支持按关键词搜索、日期筛选及活动分类过滤，清晰展示生活轨迹。
+- **AI 深度洞察**: 基于每日数据生成个性化总结，分析时间去向并提供改进建议。
+- **多端同步与备份**: 支持用户注册登录，数据实时同步云端。同时提供一键导出 CSV/JSON 功能。
+- **PWA 支持**: 可作为独立 App 安装至手机主屏幕，享受类原生的流畅体验。
 
-- **语音/文本记录**: 支持自然语言输入，AI 自动提取关键信息（活动、类别、时长、心情、重要性）。
-- **历史时间轴**: 清晰展示每天的活动轨迹。
-- **智能分析**: 可视化图表展示时间分布，AI 提供每日生活摘要和改进建议。
-- **本地优先**: 数据存储在浏览器本地 (LocalStorage)，保护隐私。
+## 🚀 技术架构
 
-## 特性
+本项目采用全栈分离架构，并在安全性与性能上做了深度优化：
 
-- ✅ **国内优化**: Tailwind CSS、字体等资源已替换为国内稳定 CDN。
-- ✅ **通义千问**: 集成阿里云 Qwen-Plus 模型，提供强大的中文理解能力。
-- ✅ **React + TypeScript**: 现代化前端技术栈，响应迅速。
+- **前端**: React 19 + TypeScript + Vite + Tailwind CSS + Recharts。
+- **后端**: Node.js + Express + Sequelize ORM。
+- **数据库**: MySQL 8.x。
+- **AI 能力**: 阿里云通义千问 (Qwen) 通过后端代理调用，**确保 API Key 不被泄露**。
 
-## 快速开始
+## 🛠️ 环境准备
 
-### 1. 准备工作
+- [Node.js](https://nodejs.org/) (建议 v18.0.0 或更高版本)
+- [MySQL](https://www.mysql.com/) (建议 8.0+)
 
-确保你的电脑已安装 [Node.js](https://nodejs.org/).
+## 📦 快速开始
 
-### 2. 获取 API Key
-
-本项目使用阿里云通义千问模型，你需要获取一个 API Key：
-1. 访问 [阿里云百炼控制台](https://bailian.console.aliyun.com/).
-2. 开通 "通义千问" 服务（通常有免费额度）。
-3. 创建一个新的 API Key。
-
-### 3. 安装依赖
-
-在项目根目录下运行：
+### 1. 克隆与安装
 
 ```bash
+# 克隆项目
+git clone https://github.com/your-repo/life-pulse-ai.git
+cd life-pulse-ai
+
+# 安装前端依赖
+npm install
+
+# 安装后端依赖
+cd server
 npm install
 ```
 
-如遇到网络问题，建议使用淘宝镜像：
+### 2. 环境配置
 
-```bash
-npm config set registry https://registry.npmmirror.com
-npm install
-```
-
-### 4. 配置环境变量
-
-在项目根目录下创建一个名为 `.env` 的文件，并添加你的 API Key：
-
+#### 后端配置 (server/.env)
+在 `server` 文件夹下创建 `.env` 文件：
 ```env
-# 请将 <YOUR_API_KEY> 替换为你实际的阿里云 API Key
-DASHSCOPE_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx
+PORT=5002
+JWT_SECRET=your_jwt_secret_key
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=root
+DB_PASS=你的数据库密码
+DB_NAME=lifepulse_db
 
-# 可选：指定使用的模型 (默认使用 qwen-plus)
-# 可选值: qwen-plus, qwen-plus-2025-12-01, qwen-turbo 等
+# 阿里云通义千问 API Key
+DASHSCOPE_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx
 QWEN_MODEL=qwen-plus
 ```
 
-### 5. 启动项目
+### 3. 运行项目
 
+你需要同时开启两个终端：
+
+**终端 1 (后端服务)**:
 ```bash
+cd server
+node index.js
+```
+
+**终端 2 (前端界面)**:
+```bash
+# 回到项目根目录
 npm run dev
 ```
 
-浏览器访问 `http://localhost:3000` 即可开始使用。
+浏览器访问 `http://localhost:3000` 即可使用。
 
-## 技术栈
+## 🗺️ 全平台路线图 (Roadmap)
 
-- **前端框架**: React 19, Vite
-- **UI 组件**: Tailwind CSS (Staticfile CDN), Recharts
-- **AI模型**: 通义千问 (Qwen-Plus) via OpenAI SDK
-- **开发语言**: TypeScript
+### 1. 核心体验与安全性 (已完成)
+- [x] **搜索与筛选**: 关键词、分类、日期多维度查询。
+- [x] **数据安全**: 后端中转 AI 请求，彻底解决 API Key 泄露风险。
+- [x] **数据导出**: 支持 Excel 友好的 CSV 格式及 JSON 原始数据导出。
 
-## 注意事项
+### 2. 跨端与 App 增强 (进行中)
+- [x] **PWA (Progressive Web App)**: 支持手机桌面安装及离线图标。
+- [x] **持久化云同步**: 接入 MySQL，完成从 LocalStorage 到云端数据库的无缝迁移。
+- [ ] **多模态纪录**: 计划支持图片附件和地点捕捉。
+- [ ] **Capacitor 原生化**: 计划包装为正式的 iOS/Android 应用。
 
-- 本项目通过前端直接调用 AI 接口，仅供个人学习和本地使用。请勿将包含 API Key 的代码部署到公共网络，以免 Key 被盗用。
-- 首次使用可能需要允许浏览器的麦克风权限以使用语音输入功能。
+### 3. AI 深度洞察 (长期)
+- [ ] **周/月报汇总**: AI 自动生成长期生活趋势报告。
+- [ ] **智能提醒**: 基于历史习惯提供个性化平衡建议。
 
-## 全平台路线图 (Roadmap)
+## 🛡️ 注意事项
 
-本项目致力于提供极致的跨端生活记录体验，计划支持 H5、PWA 以及 iOS/Android 原生应用。
+- **端口冲突**: 在 macOS 上，如果 5000/5001 端口被系统 AirPlay 占用，本项目已默认切换至 **5002** 端口。
+- **权限申请**: 语音输入功能需在安全上下层（HTTPS 或 localhost）下运行，请根据浏览器提示允许麦克风权限。
 
-### 1. 核心体验增强 (进行中)
-- [x] **搜索与筛选**: 能够按关键词、分类或日期筛选历史记录。
-- [x] **数据导出/备份**: 支持导出为 CSV (Excel 友好) 和 JSON 格式。
-- [x] **筛选 UI 优化**: 采用折叠式设计，适配移动端窄屏。
-- [ ] **多模态录入**: 支持图片附件纪录。
-
-### 2. 跨端与 App 规划 (当前重点)
-- [x] **PWA (Progressive Web App)**: 支持“添加到主屏幕”，提供离线图标和类原生体验。
-- [ ] **Capacitor 原生化**:
-    - 使用 Capacitor 将 Web 包装为 iOS/Android 原生工程。
-    - 接入原生声音驱动，优化微信等环境下的录音成功率。
-    - 适配原生系统级通知。
-- [ ] **WeChat H5 适配**: 引入微信 JS-SDK，解决 iOS 微信内录音受限问题。
-
-### 3. 数据云端同步 (中期)
-- [ ] **后端架构**: 使用 Node.js 搭建中转服务，**保护 API Key 不被泄露**。
-- [ ] **持久化存储**: 接入 MySQL 数据库，替换目前的 LocalStorage。
-- [ ] **多端同步**: 确保手机 App、电脑网页数据实时同步。
-
-### 4. AI 深度洞察 (长期)
-- [ ] **周/月报生成**: AI 总结这一周/月的变化趋势。
-- [ ] **智能提醒**: 根据历史规律，提醒用户平衡工作与休息。
-- [ ] **情绪轨迹分析**: 深度分析情绪波动与活动之间的关联。
+---
+*LifePulse AI - 记录生活脉动，开启数字觉察。*

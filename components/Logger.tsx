@@ -18,9 +18,10 @@ function generateUUID(): string {
 
 interface LoggerProps {
   onAddLog: (entry: LogEntry) => void;
+  userId: string;
 }
 
-const Logger: React.FC<LoggerProps> = ({ onAddLog }) => {
+const Logger: React.FC<LoggerProps> = ({ onAddLog, userId }) => {
   const [inputText, setInputText] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -89,6 +90,7 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog }) => {
       const parsed = await parseLifeLog(inputText);
       const newEntry: LogEntry = {
         id: generateUUID(),
+        userId: userId,
         timestamp: Date.now(),
         rawText: inputText,
         activity: parsed.activity || '未知活动',
