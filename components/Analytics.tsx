@@ -6,6 +6,9 @@ import { getDailyInsight } from '../services/qwenService';
 
 interface AnalyticsProps {
   logs: LogEntry[];
+  isGuest?: boolean;
+  insight: string;
+  isGenerating: boolean;
 }
 
 const COLORS = ['#4F46E5', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#64748B'];
@@ -18,64 +21,79 @@ const CATEGORY_MAP: Record<string, string> = {
   'Other': '其他'
 };
 
-const Analytics: React.FC<AnalyticsProps> = ({ logs }) => {
-  const [insight, setInsight] = useState<string>('正在生成 AI 洞察...');
-  const [isGenerating, setIsGenerating] = useState(false);
+const Analytics: React.FC<AnalyticsProps> = ({ 
+  logs, 
+  isGuest = false,
+  insight,
+  isGenerating
+}) => {
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
-  useEffect(() => {
-    const fetchInsight = async () => {
-      if (logs.length > 0) {
-        setIsGenerating(true);
-        try {
-          const res = await getDailyInsight(logs);
-          setInsight(res);
-        } catch (e) {
-          setInsight("暂时无法生成洞察，请稍后再试。");
-        } finally {
-          setIsGenerating(false);
-        }
-      } else {
-        setInsight("开始记录你的生活，AI 将在这里为你分析时间去向。");
-      }
-    };
-    fetchInsight();
-  }, [logs]);
+  const filteredLogs = useMemo(() => {
+    return logs.filter(log => {
+      const logDate = new Date(log.timestamp).toISOString().split('T')[0];
+      return logDate === selectedDate;
+    });
+  }, [logs, selectedDate]);
+
+  const displayInsight = useMemo(() => {
+    if (isGuest) return "游客模式暂不支持 AI 深度总结。登录后可享受全天候自动洞察、趋势分析及数据备份功能！";
+    if (selectedDate !== new Date().toISOString().split('T')[0]) {
+      return "目前的 AI 每日洞察专注于分析最近记录的内容。如需历史回顾，请查看时间轴。";
+    }
+    if (filteredLogs.length === 0) return "今天还没有记录任何内容，AI 将在你记录后为你分析时间去向。";
+    if (isGenerating) return "正在整合你的数据...";
+    return insight || "正在准备 AI 洞察...";
+  }, [isGuest, filteredLogs.length, isGenerating, insight, selectedDate]);
 
   const categoryData = useMemo(() => {
     const map: Record<string, number> = {};
-    logs.forEach(log => {
+    filteredLogs.forEach(log => {
       const label = CATEGORY_MAP[log.category] || log.category;
       map[label] = (map[label] || 0) + log.durationMinutes;
     });
     return Object.entries(map).map(([name, value]) => ({ name, value }));
-  }, [logs]);
+  }, [filteredLogs]);
 
   const totalTime = useMemo(() => {
-    return logs.reduce((acc, log) => acc + log.durationMinutes, 0);
-  }, [logs]);
+    return filteredLogs.reduce((acc, log) => acc + log.durationMinutes, 0);
+  }, [filteredLogs]);
 
   const hours = Math.floor(totalTime / 60);
   const mins = totalTime % 60;
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-left-4 duration-500 pb-10">
+      {/* Date Selector */}
+      <div className="flex items-center justify-between bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
+        <span className="text-sm font-bold text-slate-700">分析日期</span>
+        <input 
+          type="date" 
+          value={selectedDate}
+          onChange={(e) => setSelectedDate(e.target.value)}
+          className="bg-slate-50 border-none rounded-xl text-sm font-medium text-slate-800 focus:ring-2 focus:ring-indigo-500/20 outline-none p-2"
+        />
+      </div>
+
       {/* AI Card */}
       <div className="bg-indigo-600 rounded-3xl p-6 text-white shadow-xl shadow-indigo-100 relative overflow-hidden">
         <div className="relative z-10">
           <div className="flex items-center gap-2 mb-3">
             <svg className="w-5 h-5 text-indigo-200" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71L12 2z"/></svg>
-            <span className="text-xs font-bold uppercase tracking-widest text-indigo-200">每日洞察</span>
+            <span className="text-xs font-bold uppercase tracking-widest text-indigo-200">
+              {selectedDate === new Date().toISOString().split('T')[0] ? '每日洞察' : '历史回顾'}
+            </span>
           </div>
           <p className="text-lg leading-relaxed font-medium">
-            {isGenerating ? "正在整合你的数据..." : insight}
+            {displayInsight}
           </p>
         </div>
         <div className="absolute top-[-10%] right-[-10%] w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <StatCard label="记录时长" value={`${hours}时 ${mins}分`} sub="今日统计" />
-        <StatCard label="活动项目" value={logs.length.toString()} sub="已捕捉项" />
+        <StatCard label="统计时长" value={`${hours}时 ${mins}分`} sub={selectedDate === new Date().toISOString().split('T')[0] ? '今日统计' : '所选日统计'} />
+        <StatCard label="活动项目" value={filteredLogs.length.toString()} sub="记录项数" />
       </div>
 
       {/* Chart */}

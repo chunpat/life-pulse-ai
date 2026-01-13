@@ -7,9 +7,18 @@ interface LayoutProps {
   currentView: ViewMode;
   onViewChange: (view: ViewMode) => void;
   newLogAdded?: boolean;
+  userName?: string;
+  onLogout?: () => void;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewChange, newLogAdded = false }) => {
+export const Layout: React.FC<LayoutProps> = ({ 
+  children, 
+  currentView, 
+  onViewChange, 
+  newLogAdded = false,
+  userName = '游客',
+  onLogout
+}) => {
   return (
     // Outer Container - Desktop centered, Mobile full
     <div className="fixed inset-0 sm:flex sm:items-center sm:justify-center bg-slate-100">
@@ -24,10 +33,18 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentView, onViewCha
               <h1 className="text-xl font-black text-slate-800 tracking-tighter">
                 LifePulse <span className="text-indigo-500">AI</span>
               </h1>
-              <p className="text-xs text-slate-400 font-medium tracking-wide mt-0.5">捕捉生活点滴</p>
+              <p className="text-[10px] text-slate-400 font-bold tracking-wide mt-0.5">
+                你好, {userName}
+              </p>
             </div>
-            {/* Status Indicator (Optional) */}
-            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
+            
+            <button 
+              onClick={onLogout}
+              className="p-2 rounded-full hover:bg-slate-100 text-slate-400 transition-colors"
+              title="退出登录"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+            </button>
           </div>
         </header>
 

@@ -1,7 +1,17 @@
 
+export type AuthStatus = 'unauthenticated' | 'guest' | 'authenticated';
+
+export interface User {
+  id: string;
+  name: string;
+  email?: string;
+  avatar?: string;
+  status: AuthStatus;
+}
+
 export interface LogEntry {
   id: string;
-  userId?: string; // 为未来多用户预留
+  userId: string; // 必填，游客使用 'guest_local'
   timestamp: number;
   rawText: string;
   activity: string;
@@ -9,8 +19,9 @@ export interface LogEntry {
   durationMinutes: number;
   mood: string;
   importance: 1 | 2 | 3 | 4 | 5;
-  createdAt?: number; // 数据库创建时间
-  updatedAt?: number; // 数据库更新时间
+  tags?: string[];
+  createdAt?: number;
+  updatedAt?: number;
 }
 
 export interface DaySummary {

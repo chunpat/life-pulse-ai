@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 interface HistoryProps {
   logs: LogEntry[];
   onDelete: (id: string) => void;
+  onUpdate: (updatedLog: LogEntry) => void;
 }
 
 const CATEGORY_MAP: Record<string, string> = {
@@ -34,10 +35,91 @@ const getDateLabel = (timestamp: number) => {
   return date.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' });
 };
 
-const History: React.FC<HistoryProps> = ({ logs, onDelete }) => {
+const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
   const [logToDelete, setLogToDelete] = useState<LogEntry | null>(null);
   const [swipedId, setSwipedId] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState<LogEntry | null>(null);
+
+  // 筛选状态
+  const [showFilters, setShowFilters] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterCategory, setFilterCategory] = useState<string>('All');
+  const [filterDate, setFilterDate] = useState<string>(''); // YYYY-MM-DD
+
+  // 导出数据格式化
+  const getExportData = () => {
+    return logs.map(log => ({
+      id: log.id,
+      timestamp: log.timestamp,
+      datetime: new Date(log.timestamp).toLocaleString(),
+      category: CATEGORY_MAP[log.category] || log.category,
+      categoryKey: log.category,
+      activity: log.activity,
+      durationMinutes: log.durationMinutes,
+      originalText: log.rawText,
+      mood: log.mood || '无',
+      importance: log.importance || 3
+    }));
+  };
+
+  // 导出 JSON
+  const exportToJSON = () => {
+    const formattedData = getExportData();
+    const dataStr = JSON.stringify(formattedData, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+    const exportFileDefaultName = `life-pulse-export-${new Date().toISOString().split('T')[0]}.json`;
+    
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
+  };
+
+  // 导出 CSV
+  const exportToCSV = () => {
+    const data = getExportData();
+    const headers = ['ID', '日期时间', '分类', '活动', '时长(分)', '原始输入', '心情', '重要度'];
+    const csvRows = data.map(item => [
+      item.id,
+      item.datetime,
+      item.category,
+      `"${item.activity.replace(/"/g, '""')}"`,
+      item.durationMinutes,
+      `"${item.originalText.replace(/"/g, '""')}"`,
+      item.mood,
+      item.importance
+    ].join(','));
+
+    const csvContent = [headers.join(','), ...csvRows].join('\n');
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `life-pulse-export-${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // 执行筛选逻辑
+  const filteredLogs = logs.filter(log => {
+    // 文本搜索 (匹配活动名称或原始文本)
+    const matchesSearch = searchTerm === '' || 
+      log.activity.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      log.rawText.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    // 分类筛选
+    const matchesCategory = filterCategory === 'All' || log.category === filterCategory;
+    
+    // 日期筛选
+    const logDate = new Date(log.timestamp).toISOString().split('T')[0];
+    const matchesDate = filterDate === '' || logDate === filterDate;
+
+    return matchesSearch && matchesCategory && matchesDate;
+  });
 
   if (logs.length === 0) {
     return (
@@ -59,41 +141,175 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete }) => {
     }
   };
 
+  const startEditing = () => {
+    setEditForm(selectedLog);
+    setIsEditing(true);
+  };
+
+  const handleSaveEdit = () => {
+    if (editForm) {
+      onUpdate(editForm);
+      setSelectedLog(editForm);
+      setIsEditing(false);
+    }
+  };
+
   return (
     <div className="space-y-4 pb-10 overflow-hidden">
+      {/* 筛选与操作区域 */}
+      <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden transition-all duration-300">
+        <button 
+          onClick={() => setShowFilters(!showFilters)}
+          className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center">
+              <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+              </svg>
+            </div>
+            <span className="text-sm font-bold text-slate-700">筛选与导出</span>
+            {(searchTerm || filterCategory !== 'All' || filterDate) && (
+              <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse"></span>
+            )}
+          </div>
+          <svg 
+            className={`w-5 h-5 text-slate-400 transition-transform duration-300 ${showFilters ? 'rotate-180' : ''}`} 
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+
+        {showFilters && (
+          <div className="px-4 pb-4 space-y-3 animate-in slide-in-from-top-2 duration-300">
+            {/* 搜索框 */}
+            <div className="relative">
+              <input 
+                type="text" 
+                placeholder="搜索活动或关键词..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-slate-50 border-none rounded-2xl py-3 pl-11 pr-4 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
+              />
+              <svg className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              {searchTerm && (
+                <button onClick={() => setSearchTerm('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
+                </button>
+              )}
+            </div>
+
+            {/* 分类和日期筛选 */}
+            <div className="flex gap-2">
+              <div className="flex-1 relative">
+                <select 
+                  value={filterCategory}
+                  onChange={(e) => setFilterCategory(e.target.value)}
+                  className="w-full bg-slate-50 border-none rounded-xl py-2 pl-3 pr-8 text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 focus:ring-indigo-500/20"
+                >
+                  <option value="All">全部类别</option>
+                  {Object.entries(CATEGORY_MAP).map(([key, label]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </select>
+                <svg className="w-4 h-4 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+              </div>
+
+              <div className="flex-1 relative">
+                <input 
+                  type="date"
+                  value={filterDate}
+                  onChange={(e) => setFilterDate(e.target.value)}
+                  className="w-full bg-slate-50 border-none rounded-xl py-2 px-3 text-xs font-bold text-slate-600 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                />
+                {filterDate && (
+                  <button 
+                    onClick={() => setFilterDate('')}
+                    className="absolute right-8 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+                  >
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* 导出按钮 */}
+            <div className="flex gap-2 pt-2 border-t border-slate-50">
+              <button 
+                onClick={exportToCSV}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-slate-50 text-slate-600 text-[11px] font-bold hover:bg-slate-100 transition-colors"
+              >
+                <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                CSV 导出
+              </button>
+              <button 
+                onClick={exportToJSON}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-slate-50 text-slate-600 text-[11px] font-bold hover:bg-slate-100 transition-colors"
+              >
+                <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                JSON 备份
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="flex items-center justify-between px-1">
-        <h2 className="text-lg font-bold text-slate-800 tracking-tight">最近记录</h2>
-        <span className="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded-full">{logs.length} 条</span>
+        <h2 className="text-lg font-bold text-slate-800 tracking-tight">
+          {filteredLogs.length < logs.length ? '筛选结果' : '最近记录'}
+        </h2>
+        <span className="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded-full">{filteredLogs.length} 条</span>
       </div>
       
       <div className="space-y-1">
-        {logs.map((log, index) => {
-          const dateLabel = getDateLabel(log.timestamp);
-          const prevLog = logs[index - 1];
-          // 如果是第一条，或者当前日期与上一条不同，则显示日期头
-          const showHeader = index === 0 || dateLabel !== getDateLabel(prevLog.timestamp);
+        {filteredLogs.length > 0 ? (
+          filteredLogs.map((log, index) => {
+            const dateLabel = getDateLabel(log.timestamp);
+            const prevLog = filteredLogs[index - 1];
+            // 如果是第一条，或者当前日期与上一条不同，则显示日期头
+            const showHeader = index === 0 || dateLabel !== getDateLabel(prevLog.timestamp);
 
-          return (
-            <React.Fragment key={log.id}>
-              {showHeader && (
-                <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm py-3 px-1 mt-4 mb-2 flex items-center gap-2">
-                  <div className="h-4 w-1 bg-indigo-500 rounded-full"></div>
-                  <span className="text-sm font-bold text-slate-700">{dateLabel}</span>
-                  <div className="h-px flex-1 bg-slate-200 ml-2"></div>
+            return (
+              <React.Fragment key={log.id}>
+                {showHeader && (
+                  <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm py-3 px-1 mt-4 mb-2 flex items-center gap-2">
+                    <div className="h-4 w-1 bg-indigo-500 rounded-full"></div>
+                    <span className="text-sm font-bold text-slate-700">{dateLabel}</span>
+                    <div className="h-px flex-1 bg-slate-200 ml-2"></div>
+                  </div>
+                )}
+                <div className="mb-3">
+                  <HistoryItem 
+                    log={log} 
+                    isSwiped={swipedId === log.id}
+                    onSwipe={(id) => setSwipedId(id)}
+                    onDelete={() => setLogToDelete(log)}
+                    onDoubleClick={() => setSelectedLog(log)}
+                  />
                 </div>
-              )}
-              <div className="mb-3">
-                <HistoryItem 
-                  log={log} 
-                  isSwiped={swipedId === log.id}
-                  onSwipe={(id) => setSwipedId(id)}
-                  onDelete={() => setLogToDelete(log)}
-                  onDoubleClick={() => setSelectedLog(log)}
-                />
-              </div>
-            </React.Fragment>
-          );
-        })}
+              </React.Fragment>
+            );
+          })
+        ) : (
+          <div className="text-center py-12 bg-white rounded-3xl border border-dashed border-slate-200">
+            <p className="text-slate-400 text-sm">没有找到匹配的记录</p>
+            <button 
+              onClick={() => {
+                setSearchTerm('');
+                setFilterCategory('All');
+                setFilterDate('');
+              }}
+              className="mt-3 text-indigo-600 text-xs font-bold hover:underline"
+            >
+              清除所有筛选
+            </button>
+          </div>
+        )}
       </div>
 
       {logs.length > 0 && (
@@ -102,21 +318,97 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete }) => {
 
       {/* Detail Modal */}
       {selectedLog && (
-        <Modal onClose={() => setSelectedLog(null)} title="记录详情">
-          <div className="space-y-4">
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-              <p className="text-sm text-slate-400 mb-1">原始输入</p>
-              <p className="text-slate-800 font-medium italic">"{selectedLog.rawText}"</p>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <DetailItem label="活动" value={selectedLog.activity} />
-              <DetailItem label="分类" value={CATEGORY_MAP[selectedLog.category] || selectedLog.category} />
-              <DetailItem label="时长" value={`${selectedLog.durationMinutes} 分钟`} />
-              <DetailItem label="心情" value={selectedLog.mood} />
-              <DetailItem label="重要程度" value={'★'.repeat(selectedLog.importance) + '☆'.repeat(5 - selectedLog.importance)} className="text-amber-400" />
-              <DetailItem label="记录时间" value={new Date(selectedLog.timestamp).toLocaleString('zh-CN')} />
-            </div>
+        <Modal 
+          onClose={() => {
+            setSelectedLog(null);
+            setIsEditing(false);
+          }} 
+          title={isEditing ? "编辑记录" : "记录详情"}
+        >
+          <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2 scrollbar-hide">
+            {isEditing ? (
+              // EDIT MODE
+              <div className="space-y-4">
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">原始输入 (仅查看)</label>
+                  <p className="text-slate-500 text-xs italic">"{editForm?.rawText}"</p>
+                </div>
+
+                <div className="space-y-3">
+                   <EditInput 
+                    label="活动内容" 
+                    value={editForm?.activity || ''} 
+                    onChange={v => setEditForm(prev => prev ? {...prev, activity: v} : null)} 
+                   />
+                   
+                   <div className="grid grid-cols-2 gap-3">
+                      <EditSelect 
+                        label="分类" 
+                        value={editForm?.category || 'Other'} 
+                        options={Object.keys(CATEGORY_MAP)}
+                        labels={CATEGORY_MAP}
+                        onChange={v => setEditForm(prev => prev ? {...prev, category: v as any} : null)}
+                      />
+                      <EditInput 
+                        label="时长 (分钟)" 
+                        type="number"
+                        value={editForm?.durationMinutes?.toString() || '0'} 
+                        onChange={v => setEditForm(prev => prev ? {...prev, durationMinutes: parseInt(v) || 0} : null)} 
+                      />
+                   </div>
+
+                   <div className="grid grid-cols-2 gap-3">
+                      <EditInput 
+                        label="心情状态" 
+                        value={editForm?.mood || ''} 
+                        onChange={v => setEditForm(prev => prev ? {...prev, mood: v} : null)} 
+                      />
+                      <EditSelect 
+                        label="重要度" 
+                        value={editForm?.importance?.toString() || '3'} 
+                        options={['1', '2', '3', '4', '5']}
+                        onChange={v => setEditForm(prev => prev ? {...prev, importance: parseInt(v) as any} : null)}
+                      />
+                   </div>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                   <button 
+                    onClick={() => setIsEditing(false)}
+                    className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium"
+                   >取消</button>
+                   <button 
+                    onClick={handleSaveEdit}
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-bold shadow-lg shadow-indigo-100"
+                   >保存修改</button>
+                </div>
+              </div>
+            ) : (
+              // VIEW MODE
+              <>
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                  <p className="text-sm text-slate-400 mb-1">原始输入</p>
+                  <p className="text-slate-800 font-medium italic">"{selectedLog.rawText}"</p>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <DetailItem label="活动" value={selectedLog.activity} />
+                  <DetailItem label="分类" value={CATEGORY_MAP[selectedLog.category] || selectedLog.category} />
+                  <DetailItem label="时长" value={`${selectedLog.durationMinutes} 分钟`} />
+                  <DetailItem label="心情" value={selectedLog.mood} />
+                  <DetailItem label="重要程度" value={'★'.repeat(selectedLog.importance) + '☆'.repeat(5 - selectedLog.importance)} className="text-amber-400" />
+                  <DetailItem label="记录时间" value={new Date(selectedLog.timestamp).toLocaleString('zh-CN')} />
+                </div>
+
+                <button 
+                  onClick={startEditing}
+                  className="w-full mt-4 bg-slate-900 text-white py-3 rounded-2xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-slate-200"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                  修改此条记录
+                </button>
+              </>
+            )}
           </div>
         </Modal>
       )}
@@ -275,6 +567,33 @@ const DetailItem: React.FC<{ label: string; value: string | React.ReactNode; cla
   <div>
     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{label}</p>
     <div className={`font-semibold text-sm ${className}`}>{value}</div>
+  </div>
+);
+
+const EditInput: React.FC<{ label: string; value: string; onChange: (v: string) => void, type?: string }> = ({ label, value, onChange, type = "text" }) => (
+  <div>
+    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block pl-1">{label}</label>
+    <input 
+      type={type}
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      className="w-full bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+    />
+  </div>
+);
+
+const EditSelect: React.FC<{ label: string; value: string; options: string[]; labels?: Record<string, string>; onChange: (v: string) => void }> = ({ label, value, options, labels, onChange }) => (
+  <div>
+    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block pl-1">{label}</label>
+    <select 
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      className="w-full bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all appearance-none"
+    >
+      {options.map(opt => (
+        <option key={opt} value={opt}>{labels ? labels[opt] : opt}</option>
+      ))}
+    </select>
   </div>
 );
 
