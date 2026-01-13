@@ -9,6 +9,7 @@ interface AnalyticsProps {
   isGuest?: boolean;
   insight: string;
   isGenerating: boolean;
+  onLoginClick?: () => void;
 }
 
 const COLORS = ['#4F46E5', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#64748B'];
@@ -25,7 +26,8 @@ const Analytics: React.FC<AnalyticsProps> = ({
   logs, 
   isGuest = false,
   insight,
-  isGenerating
+  isGenerating,
+  onLoginClick
 }) => {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
@@ -87,6 +89,14 @@ const Analytics: React.FC<AnalyticsProps> = ({
           <p className="text-lg leading-relaxed font-medium">
             {displayInsight}
           </p>
+          {isGuest && onLoginClick && (
+            <button 
+              onClick={onLoginClick}
+              className="mt-4 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-xl text-sm font-bold transition-colors border border-white/30"
+            >
+              立即登录 / 注册
+            </button>
+          )}
         </div>
         <div className="absolute top-[-10%] right-[-10%] w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
       </div>

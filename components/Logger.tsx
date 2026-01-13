@@ -18,14 +18,18 @@ function generateUUID(): string {
 
 interface LoggerProps {
   onAddLog: (entry: LogEntry) => void;
+  onLogout: () => void;
   userId: string;
+  isGuest?: boolean;
+  logsCount?: number;
 }
 
-const Logger: React.FC<LoggerProps> = ({ onAddLog, userId }) => {
+const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = false, logsCount = 0 }) => {
   const [inputText, setInputText] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
+  const [showLimitModal, setShowLimitModal] = useState(false);
   const [isWeChat, setIsWeChat] = useState(false);
   const recognitionRef = useRef<any>(null);
 
@@ -84,6 +88,12 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, userId }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim() || isProcessing) return;
+
+    // 游客模式限制：限记 3 条
+    if (isGuest && logsCount >= 3) {
+      setShowLimitModal(true);
+      return;
+    }
 
     setIsProcessing(true);
     try {
@@ -167,6 +177,37 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, userId }) => {
         <QuickTip text="和莉莉喝了杯咖啡，很开心" onClick={setInputText} />
         <QuickTip text="读了 20 分钟书" onClick={setInputText} />
       </div>
+
+      {/* 游客限制弹窗 */}
+      {showLimitModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 text-center animate-in fade-in zoom-in duration-300">
+            <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-bold text-slate-800 mb-2">已达到游客限制</h3>
+            <p className="text-slate-600 mb-6">
+              游客模式仅支持记录 3 条日常。为了持久保存您的记录并解锁 AI 汇总分析功能，请前往登录。
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={onLogout}
+                className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-colors"
+              >
+                前往登录 / 注册
+              </button>
+              <button
+                onClick={() => setShowLimitModal(false)}
+                className="w-full py-3 text-slate-400 font-medium hover:text-slate-600 transition-colors"
+              >
+                再看看已记录的
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

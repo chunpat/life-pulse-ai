@@ -73,9 +73,10 @@ const App: React.FC = () => {
   };
 
   const addLog = useCallback(async (entry: LogEntry) => {
-    // 游客模式限制
-    if (user?.status === 'guest' && logs.length >= 50) {
-      alert('游客模式下最多只能记录 50 条。请登录以开启云端无限存储！');
+    // 游客模式限制：3条
+    if (user?.status === 'guest' && logs.length >= 3) {
+      // 这里的逻辑主要在 Logger.tsx 中拦截并弹窗了
+      // 但为了防御性编程，这里也保留限制
       return;
     }
 
@@ -142,7 +143,13 @@ const App: React.FC = () => {
       onLogout={handleLogout}
     >
       {view === ViewMode.LOGGER && (
-        <Logger onAddLog={addLog} userId={user.id} />
+        <Logger 
+          onAddLog={addLog} 
+          onLogout={handleLogout}
+          userId={user.id} 
+          isGuest={user.status === 'guest'}
+          logsCount={logs.length}
+        />
       )}
       {view === ViewMode.TIMELINE && (
         <History logs={logs} onDelete={deleteLog} onUpdate={updateLog} />
@@ -153,6 +160,7 @@ const App: React.FC = () => {
           isGuest={user.status === 'guest'} 
           insight={dailyInsight}
           isGenerating={isGeneratingInsight}
+          onLoginClick={handleLogout}
         />
       )}
     </Layout>

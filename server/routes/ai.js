@@ -11,8 +11,8 @@ const client = new OpenAI({
   baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
 });
 
-// 解析生活日志
-router.post('/parse', authenticateToken, async (req, res) => {
+// 解析生活日志 - 允许游客访问，前端负责次数限制
+router.post('/parse', async (req, res) => {
   try {
     const { text } = req.body;
     if (!text) return res.status(400).json({ message: '请提供文本内容' });
