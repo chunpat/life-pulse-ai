@@ -24,3 +24,9 @@ dist-ssr
 *.sw?
 
 .env
+package-lock.json
+
+# server
+/server/node_modules
+/server/.env
+/server/package-lock.json
