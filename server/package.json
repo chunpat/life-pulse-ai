@@ -20,6 +20,7 @@
     "mysql2": "^3.16.0",
     "node-fetch": "^2.7.0",
     "openai": "^6.16.0",
-    "sequelize": "^6.37.7"
+    "sequelize": "^6.37.7",
+    "weixin-js-sdk": "^1.6.5"
   }
 }

@@ -37,9 +37,11 @@ app.use((req, res, next) => {
 const authRoutes = require('./routes/auth');
 const logRoutes = require('./routes/logs');
 const aiRoutes = require('./routes/ai');
+const wechatRoutes = require('./routes/wechat');
 app.use('/api/auth', authRoutes);
 app.use('/api/logs', logRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/wechat', wechatRoutes);
 
 // Health Check
 app.get('/', (req, res) => {

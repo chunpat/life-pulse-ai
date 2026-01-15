@@ -31,6 +31,7 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [isWeChat, setIsWeChat] = useState(false);
+  const [wxReady, setWxReady] = useState(false);
   const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
@@ -38,6 +39,34 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
     const ua = window.navigator.userAgent.toLowerCase();
     if (ua.indexOf('micromessenger') !== -1) {
       setIsWeChat(true);
+    }
+
+    // 微信 JS-SDK 初始化
+    if (ua.indexOf('micromessenger') !== -1 && (window as any).wx) {
+      const initWx = async () => {
+        try {
+          const res = await fetch(`/api/wechat/config?url=${encodeURIComponent(window.location.href.split('#')[0])}`);
+          const config = await res.json();
+          if (config.enabled) {
+            (window as any).wx.config({
+              debug: false,
+              appId: config.appId,
+              timestamp: config.timestamp,
+              nonceStr: config.nonceStr,
+              signature: config.signature,
+              jsApiList: ['startRecord', 'stopRecord', 'translateVoice', 'onVoiceRecordEnd']
+            });
+            (window as any).wx.ready(() => setWxReady(true));
+            (window as any).wx.error((err: any) => {
+              console.error('WeChat JS-SDK Error:', err);
+              setWxReady(false);
+            });
+          }
+        } catch (e) {
+          console.error("WeChat JS-SDK init failed", e);
+        }
+      };
+      initWx();
     }
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -70,6 +99,67 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
     // 重置权限错误状态，允许用户重试
     if (permissionDenied) {
       setPermissionDenied(false);
+    }
+
+    // 优先使用微信 JS-SDK (针对 iOS 微信兼容性)
+    if (isWeChat && wxReady) {
+      const wx = (window as any).wx;
+      if (isListening) {
+        wx.stopRecord({
+          success: (res: any) => {
+            const localId = res.localId;
+            setIsListening(false);
+            wx.translateVoice({
+              localId,
+              isShowProgressTips: 1,
+              success: (res2: any) => {
+                const text = res2.translateResult;
+                if (text) {
+                  const cleanedText = text.replace(/[。，？！]$/, ''); // 移除微信识别自动加的句号
+                  setInputText(prev => (prev + ' ' + cleanedText).trim());
+                }
+              }
+            });
+          },
+          fail: (err: any) => {
+            console.error("Stop record failed", err);
+            setIsListening(false);
+          }
+        });
+      } else {
+        setIsListening(true);
+        wx.startRecord({
+          success: () => {
+            wx.onVoiceRecordEnd({
+              complete: (res: any) => {
+                const localId = res.localId;
+                setIsListening(false);
+                wx.translateVoice({
+                  localId,
+                  isShowProgressTips: 1,
+                  success: (res2: any) => {
+                    const text = res2.translateResult;
+                    if (text) {
+                      const cleanedText = text.replace(/[。，？！]$/, '');
+                      setInputText(prev => (prev + ' ' + cleanedText).trim());
+                    }
+                  }
+                });
+              }
+            });
+          },
+          cancel: () => {
+            setIsListening(false);
+            alert('您拒绝了授权录音');
+          },
+          fail: (err: any) => {
+            console.error("Start record failed", err);
+            setIsListening(false);
+            setPermissionDenied(true);
+          }
+        });
+      }
+      return;
     }
 
     if (isListening) {
@@ -149,7 +239,11 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
               <div className="absolute top-full left-0 mt-2 w-max max-w-[200px] bg-red-50 text-red-500 text-xs p-2 rounded-lg border border-red-100 shadow-sm z-10 animate-in fade-in zoom-in-95 duration-200">
                 <p className="font-bold mb-1">无法通过语音录入</p>
                 {isWeChat ? (
-                  <span>检测到您正在使用微信浏览器。微信 iOS 版会拦截网页自带的录音功能，请点击右上角选择<b>“在 Safari 中打开”</b>即可正常使用。</span>
+                  wxReady ? (
+                    <span>微信录音启动失败。请确保您已授权微信访问麦克风。</span>
+                  ) : (
+                    <span>检测到微信环境。通常 iOS 微信会拦截网页原生语音接口。您可以点击右上角<b>“在 Safari 中打开”</b>，或确保系统已正确配置并授权微信 JS-SDK。</span>
+                  )
                 ) : (
                   <span>请点击地址栏的 🔒 或设置图标开启麦克风权限，然后点击此按钮重试。</span>
                 )}
