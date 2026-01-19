@@ -37,10 +37,12 @@ app.use((req, res, next) => {
 const authRoutes = require('./routes/auth');
 const logRoutes = require('./routes/logs');
 const aiRoutes = require('./routes/ai');
+const financeRoutes = require('./routes/finance');
 const wechatRoutes = require('./routes/wechat');
 app.use('/api/auth', authRoutes);
 app.use('/api/logs', logRoutes);
 app.use('/api/ai', aiRoutes);
+app.use('/api/finance', financeRoutes);
 app.use('/api/wechat', wechatRoutes);
 
 // Health Check
@@ -49,9 +51,10 @@ app.get('/', (req, res) => {
 });
 
 // Database Sync & Server Start
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5002;
 const User = require('./models/User');
 const Log = require('./models/Log');
+const FinanceRecord = require('./models/FinanceRecord');
 
 sequelize.sync({ alter: true })
   .then(() => {

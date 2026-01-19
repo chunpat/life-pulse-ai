@@ -1,4 +1,4 @@
-import { LogEntry } from '../types';
+import { LogEntry, ParseResult } from '../types';
 
 const API_BASE_URL = '/api/ai';
 
@@ -7,7 +7,7 @@ const getAuthHeader = () => {
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 };
 
-export const parseLifeLog = async (text: string): Promise<Partial<LogEntry>> => {
+export const parseLifeLog = async (text: string): Promise<ParseResult> => {
   const response = await fetch(`${API_BASE_URL}/parse`, {
     method: 'POST',
     headers: {

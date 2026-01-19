@@ -1,7 +1,7 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 
-const Log = sequelize.define('Log', {
+const FinanceRecord = sequelize.define('FinanceRecord', {
   id: {
     type: DataTypes.UUID,
     defaultValue: DataTypes.UUIDV4,
@@ -11,40 +11,33 @@ const Log = sequelize.define('Log', {
     type: DataTypes.UUID,
     allowNull: false
   },
-  rawText: {
-    type: DataTypes.TEXT,
+  type: {
+    type: DataTypes.ENUM('EXPENSE', 'INCOME'),
+    allowNull: false,
+    defaultValue: 'EXPENSE'
+  },
+  amount: {
+    type: DataTypes.DECIMAL(10, 2),
     allowNull: false
   },
-  activity: {
+  currency: {
     type: DataTypes.STRING,
-    allowNull: false
+    defaultValue: 'CNY'
   },
   category: {
     type: DataTypes.STRING,
     allowNull: false
   },
-  durationMinutes: {
-    type: DataTypes.INTEGER,
-    allowNull: true
-  },
-  mood: {
+  description: {
     type: DataTypes.STRING,
     allowNull: true
   },
-  importance: {
-    type: DataTypes.INTEGER,
-    defaultValue: 3
-  },
-  timestamp: {
-    type: DataTypes.BIGINT,
-    allowNull: false
-  },
-  metadata: {
-    type: DataTypes.JSON,
-    allowNull: true
+  transactionDate: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
   }
 }, {
   paranoid: true
 });
 
-module.exports = Log;
+module.exports = FinanceRecord;

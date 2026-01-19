@@ -1,6 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { parseLifeLog } from '../services/qwenService';
+import { createFinanceRecord } from '../services/financeService';
 import { LogEntry } from '../types';
 
 // 兼容性 UUID 生成函数
@@ -188,6 +189,18 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
     setIsProcessing(true);
     try {
       const parsed = await parseLifeLog(inputText);
+
+      // 自动保存财务记录
+      if (parsed.finance && parsed.finance.length > 0) {
+        try {
+          await Promise.all(parsed.finance.map(f => createFinanceRecord(f)));
+          // 可以考虑使用更优雅的 Toast 提示
+          // alert(`已自动记录 ${parsed.finance.length} 笔财务账单`); 
+        } catch (e) {
+          console.error("Failed to save finance", e);
+        }
+      }
+
       const newEntry: LogEntry = {
         id: generateUUID(),
         userId: userId,

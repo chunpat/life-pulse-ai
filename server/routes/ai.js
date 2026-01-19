@@ -26,22 +26,33 @@ router.post('/parse', async (req, res) => {
       messages: [
         {
           role: "system",
-          content: `你是一位专业的生活记录助手。你的任务是从用户的随手记笔记中提取活动和元数据。
+          content: `你是一位专业的生活记录及财务助手。你的任务是从用户的随手记笔记中提取活动元数据以及财务消费情况。
 请返回纯 JSON 格式，不要包含 Markdown 格式（如 \`\`\`json）。
-- 分类 (category) 必须是以下之一：Work, Leisure, Health, Chores, Social, Other。
-- 持续时间 (durationMinutes)：如果未提及，请根据活动内容估算一个合理的时长（分钟）。
-- 心情 (mood)：用简洁的中文描述氛围（例如：开心、疲惫、高效）。
-- 重要程度 (importance)：从 1（琐碎）到 5（重要）进行评分，数字类型。
-- 如果提到了多个活动，请关注主要活动或逻辑上合并它们。
-- 所有的文本字段（activity, mood）请使用中文回复。
+
+1. **生活记录** (作为根对象的属性):
+   - activity: 活动内容摘要
+   - category: 必须是以下之一：Work, Leisure, Health, Chores, Social, Other。
+   - durationMinutes: 估算时长(分钟)
+   - mood: 心情(如：开心、疲惫、高效)
+   - importance: 1-5分
+
+2. **财务记录** (放入 finance 数组中, 如果没有则为空数组):
+   - type: "EXPENSE" (支出) 或 "INCOME" (收入)
+   - amount: 金额 (数字)
+   - category: 类别 (如: 餐饮, 交通, 购物, 工资, 理财 等)
+   - description: 描述
 
 返回格式示例：
 {
-  "activity": "写代码",
-  "category": "Work",
+  "activity": "吃午饭并买书",
+  "category": "Leisure",
   "durationMinutes": 60,
-  "mood": "专注",
-  "importance": 5
+  "mood": "开心",
+  "importance": 3,
+  "finance": [
+    { "type": "EXPENSE", "amount": 50, "category": "餐饮", "description": "午饭" },
+    { "type": "EXPENSE", "amount": 100, "category": "购物", "description": "买书" }
+  ]
 }`
         },
         {

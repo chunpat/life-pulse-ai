@@ -4,6 +4,7 @@ import { ViewMode, LogEntry, User, AuthStatus } from './types';
 import Logger from './components/Logger';
 import History from './components/History';
 import Analytics from './components/Analytics';
+import Finance from './components/Finance';
 import Auth from './components/Auth';
 import { Layout } from './components/Layout';
 import { storageService } from './services/storageService';
@@ -153,6 +154,9 @@ const App: React.FC = () => {
       )}
       {view === ViewMode.TIMELINE && (
         <History logs={logs} onDelete={deleteLog} onUpdate={updateLog} />
+      )}
+      {view === ViewMode.FINANCE && (
+        <Finance userId={user.id} />
       )}
       {view === ViewMode.ANALYTICS && (
         <Analytics 

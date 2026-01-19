@@ -32,8 +32,25 @@ export interface DaySummary {
   aiInsight: string;
 }
 
+
+export interface FinanceRecord {
+  id?: string;
+  userId?: string;
+  type: 'EXPENSE' | 'INCOME';
+  amount: number;
+  currency?: string;
+  category: string;
+  description?: string;
+  transactionDate: string;
+}
+
+export interface ParseResult extends Partial<LogEntry> {
+  finance?: FinanceRecord[];
+}
+
 export enum ViewMode {
   LOGGER = 'LOGGER',
   TIMELINE = 'TIMELINE',
-  ANALYTICS = 'ANALYTICS'
+  ANALYTICS = 'ANALYTICS',
+  FINANCE = 'FINANCE'
 }
