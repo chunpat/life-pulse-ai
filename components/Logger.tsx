@@ -60,51 +60,74 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
   };
 
   const captureLocation = () => {
-    if (!navigator.geolocation) {
-      alert("您的浏览器不支持地理位置功能");
+    setIsGettingLocation(true);
+
+    const handleSuccess = async (latitude: number, longitude: number) => {
+      let locationName = "未知位置";
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&accept-language=zh-CN`);
+        const data = await res.json();
+        if (data && data.address) {
+          const addr = data.address;
+          const parts = [
+            addr.road || addr.building || addr.amenity,
+            addr.suburb || addr.district || addr.city
+          ].filter(Boolean);
+          locationName = parts.length > 0 ? parts.join(', ') : data.display_name.split(',')[0];
+        } else {
+           locationName = `经度:${longitude.toFixed(2)}, 纬度:${latitude.toFixed(2)}`;
+        }
+      } catch (e) {
+        console.error("逆地理编码失败", e);
+        locationName = `位置 (${latitude.toFixed(2)}, ${longitude.toFixed(2)})`;
+      }
+
+      setCurrentLocation({ name: locationName, latitude, longitude });
+      setIsGettingLocation(false);
+    };
+
+    const handleError = (error: any) => {
+      console.error("获取位置失败:", error);
+      alert("获取位置失败，请确保已开启定位权限");
+      setIsGettingLocation(false);
+    };
+
+    // 优先使用微信 JS-SDK 定位
+    if (isWeChat && wxReady) {
+      const wx = (window as any).wx;
+      wx.getLocation({
+        type: 'gcj02', // 国测局坐标，火星坐标系，更适合国内环境
+        success: (res: any) => {
+          handleSuccess(res.latitude, res.longitude);
+        },
+        fail: (err: any) => {
+          console.warn("微信定位失败，尝试 H5 定位", err);
+          // 微信失败后尝试 H5 定位作为后备
+          if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+              (pos) => handleSuccess(pos.coords.latitude, pos.coords.longitude),
+              handleError,
+              { enableHighAccuracy: true, timeout: 5000 }
+            );
+          } else {
+            handleError(err);
+          }
+        }
+      });
       return;
     }
 
-    setIsGettingLocation(true);
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        let locationName = "未知位置";
-        
-        try {
-          // 使用 OpenStreetMap Nominatim API 进行逆地理编码 (免费)
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&accept-language=zh-CN`);
-          const data = await res.json();
-          if (data && data.address) {
-            // 优先显示：道路/建筑物 > 街区 > 城市
-            const addr = data.address;
-            const parts = [
-              addr.road || addr.building || addr.amenity,
-              addr.suburb || addr.district || addr.city
-            ].filter(Boolean);
-            locationName = parts.length > 0 ? parts.join(', ') : data.display_name.split(',')[0];
-          } else {
-             locationName = `经度:${longitude.toFixed(2)}, 纬度:${latitude.toFixed(2)}`;
-          }
-        } catch (e) {
-          console.error("逆地理编码失败", e);
-          locationName = `位置 (${latitude.toFixed(2)}, ${longitude.toFixed(2)})`;
-        }
-
-        setCurrentLocation({
-          name: locationName,
-          latitude,
-          longitude
-        });
-        setIsGettingLocation(false);
-      },
-      (error) => {
-        console.error("获取位置失败:", error);
-        alert("获取位置失败，请确保已开启定位权限");
-        setIsGettingLocation(false);
-      },
-      { enableHighAccuracy: true, timeout: 5000 }
-    );
+    // 标准 H5 定位
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => handleSuccess(pos.coords.latitude, pos.coords.longitude),
+        handleError,
+        { enableHighAccuracy: true, timeout: 5000 }
+      );
+    } else {
+      alert("您的浏览器不支持地理位置功能");
+      setIsGettingLocation(false);
+    }
   };
 
   useEffect(() => {
@@ -132,6 +155,7 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
                 'stopRecord', 
                 'translateVoice', 
                 'onVoiceRecordEnd',
+                'getLocation',             // 添加定位接口
                 'updateAppMessageShareData',
                 'updateTimelineShareData',
                 'onMenuShareAppMessage',   // 兼容旧接口
