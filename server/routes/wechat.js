@@ -88,4 +88,37 @@ router.get('/config', async (req, res) => {
   }
 });
 
+// 逆地理编码代理，解决前端跨域或被拦截问题
+router.get('/reverse-geocode', async (req, res) => {
+  try {
+    const { lat, lng } = req.query;
+    if (!lat || !lng) return res.status(400).json({ message: '缺少经纬度参数' });
+
+    // 使用 Nominatim OpenStreetMap 接口 (服务端请求不会被微信浏览器拦截)
+    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&accept-language=zh-CN`;
+    
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'LifePulseAI-Server/1.0'
+      }
+    });
+    const data = await response.json();
+    
+    let address = '未知地点';
+    if (data && data.address) {
+      const addr = data.address;
+      const parts = [
+        addr.road || addr.building || addr.amenity || addr.city_district || addr.suburb,
+        addr.district || addr.city || addr.province
+      ].filter(Boolean);
+      address = parts.length > 0 ? parts.join(', ') : (data.display_name.split(',')[0] || '未知地点');
+    }
+
+    res.json({ address });
+  } catch (error) {
+    console.error('Reverse Geocode Proxy Error:', error);
+    res.status(500).json({ message: '地址解析服务异常' });
+  }
+});
+
 module.exports = router;

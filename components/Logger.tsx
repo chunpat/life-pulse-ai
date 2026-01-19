@@ -62,21 +62,16 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
   const captureLocation = () => {
     setIsGettingLocation(true);
 
-    const handleSuccess = async (latitude: number, longitude: number) => {
+    const handleSuccess = async (latInput: string | number, lngInput: string | number) => {
+      const latitude = typeof latInput === 'string' ? parseFloat(latInput) : latInput;
+      const longitude = typeof lngInput === 'string' ? parseFloat(lngInput) : lngInput;
+      
       let locationName = "未知位置";
       try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1&accept-language=zh-CN`);
+        // 使用后端代理进行逆地理编码，避免前端请求被微信拦截或跨域问题
+        const res = await fetch(`/api/wechat/reverse-geocode?lat=${latitude}&lng=${longitude}`);
         const data = await res.json();
-        if (data && data.address) {
-          const addr = data.address;
-          const parts = [
-            addr.road || addr.building || addr.amenity,
-            addr.suburb || addr.district || addr.city
-          ].filter(Boolean);
-          locationName = parts.length > 0 ? parts.join(', ') : data.display_name.split(',')[0];
-        } else {
-           locationName = `经度:${longitude.toFixed(2)}, 纬度:${latitude.toFixed(2)}`;
-        }
+        locationName = data.address || `位置 (${latitude.toFixed(2)}, ${longitude.toFixed(2)})`;
       } catch (e) {
         console.error("逆地理编码失败", e);
         locationName = `位置 (${latitude.toFixed(2)}, ${longitude.toFixed(2)})`;
@@ -88,7 +83,6 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
 
     const handleError = (error: any) => {
       console.error("获取位置失败:", error);
-      alert("获取位置失败，请确保已开启定位权限");
       setIsGettingLocation(false);
     };
 
@@ -96,12 +90,11 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
     if (isWeChat && wxReady) {
       const wx = (window as any).wx;
       wx.getLocation({
-        type: 'gcj02', // 国测局坐标，火星坐标系，更适合国内环境
+        type: 'gcj02', 
         success: (res: any) => {
           handleSuccess(res.latitude, res.longitude);
         },
         fail: (err: any) => {
-          console.warn("微信定位失败，尝试 H5 定位", err);
           // 微信失败后尝试 H5 定位作为后备
           if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
@@ -125,7 +118,6 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
         { enableHighAccuracy: true, timeout: 5000 }
       );
     } else {
-      alert("您的浏览器不支持地理位置功能");
       setIsGettingLocation(false);
     }
   };
@@ -145,7 +137,7 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
           const config = await res.json();
           if (config.enabled) {
             (window as any).wx.config({
-              debug: false, // 开启调试模式，排查分享失败原因
+              debug: false, 
               appId: config.appId,
               timestamp: config.timestamp,
               nonceStr: config.nonceStr,
@@ -164,20 +156,23 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
             });
             (window as any).wx.ready(() => {
               setWxReady(true);
-              // 配置分享信息
+              
               const shareData = {
                 title: 'LifePulse AI - 智能生活记录助手',
                 desc: '记录生活点滴，AI 帮你统计与分析。',
                 link: window.location.href.split('#')[0],
-                imgUrl: window.location.origin + '/pwa-192x192.png', // 使用 PWA 图标
+                imgUrl: window.location.origin + '/pwa-192x192.png',
               };
               
               const wx = (window as any).wx;
-              // 新接口
-              if (wx.updateAppMessageShareData) wx.updateAppMessageShareData(shareData);
-              if (wx.updateTimelineShareData) wx.updateTimelineShareData(shareData);
               
-              // 兼容旧版本接口，确保在某些环境下能显示卡片
+              if (wx.updateAppMessageShareData) {
+                wx.updateAppMessageShareData(shareData);
+              }
+              if (wx.updateTimelineShareData) {
+                wx.updateTimelineShareData(shareData);
+              }
+              
               if (wx.onMenuShareAppMessage) wx.onMenuShareAppMessage(shareData);
               if (wx.onMenuShareTimeline) wx.onMenuShareTimeline(shareData);
             });
@@ -387,11 +382,11 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
         )}
 
         <div className="flex justify-between items-center bg-slate-50 -mx-5 -mb-5 px-5 py-3 rounded-b-[2rem] border-t border-slate-100">
-          <div className="flex items-center gap-2 relative">
+          <div className="flex items-center gap-2 relative overflow-x-auto no-scrollbar flex-1 mr-2 py-1">
             <button 
               type="button"
               onClick={toggleListening}
-              className={`p-2.5 rounded-xl transition-all ${
+              className={`flex-none p-2.5 rounded-xl transition-all ${
                 isListening 
                   ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-100' 
                   : permissionDenied 
@@ -400,7 +395,7 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
               }`}
               title={isListening ? "停止录音" : "语音录入"}
             >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+              <svg className="w-5 h-5 flex-none" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
             </button>
 
             {/* 图片上传按钮 */}
@@ -415,13 +410,13 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}
-              className={`p-2.5 rounded-xl bg-white text-slate-500 hover:text-indigo-600 shadow-sm border border-slate-100 transition-all ${isUploading ? 'animate-pulse' : ''}`}
+              className={`flex-none p-2.5 rounded-xl bg-white text-slate-500 hover:text-indigo-600 shadow-sm border border-slate-100 transition-all ${isUploading ? 'animate-pulse' : ''}`}
               title="上传图片"
             >
               {isUploading ? (
-                <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                <svg className="w-5 h-5 animate-spin flex-none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
               ) : (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 flex-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
               )}
@@ -432,10 +427,10 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
               type="button"
               onClick={captureLocation}
               disabled={isGettingLocation}
-              className={`p-2.5 rounded-xl transition-all shadow-sm border border-slate-100 ${currentLocation ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-white text-slate-500 hover:text-indigo-600'} ${isGettingLocation ? 'animate-bounce' : ''}`}
+              className={`flex-none p-2.5 rounded-xl transition-all shadow-sm border border-slate-100 ${currentLocation ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-white text-slate-500 hover:text-indigo-600 transition-colors'} ${isGettingLocation ? 'animate-bounce' : ''}`}
               title="获取地点"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5 flex-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
@@ -446,10 +441,10 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
               <button
                 type="button"
                 onClick={() => setShowShareOverlay(true)}
-                className="p-2.5 rounded-xl bg-white text-slate-500 hover:text-indigo-600 shadow-sm border border-slate-100 transition-all"
+                className="flex-none p-2.5 rounded-xl bg-white text-slate-500 hover:text-indigo-600 shadow-sm border border-slate-100 transition-all"
                 title="转发给朋友"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 flex-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                 </svg>
               </button>
