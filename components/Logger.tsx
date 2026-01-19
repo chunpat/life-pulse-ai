@@ -38,6 +38,7 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [isWeChat, setIsWeChat] = useState(false);
   const [wxReady, setWxReady] = useState(false);
+  const [showShareOverlay, setShowShareOverlay] = useState(false);
   const recognitionRef = useRef<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -121,14 +122,41 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
           const config = await res.json();
           if (config.enabled) {
             (window as any).wx.config({
-              debug: false,
+              debug: false, // 开启调试模式，排查分享失败原因
               appId: config.appId,
               timestamp: config.timestamp,
               nonceStr: config.nonceStr,
               signature: config.signature,
-              jsApiList: ['startRecord', 'stopRecord', 'translateVoice', 'onVoiceRecordEnd']
+              jsApiList: [
+                'startRecord', 
+                'stopRecord', 
+                'translateVoice', 
+                'onVoiceRecordEnd',
+                'updateAppMessageShareData',
+                'updateTimelineShareData',
+                'onMenuShareAppMessage',   // 兼容旧接口
+                'onMenuShareTimeline'      // 兼容旧接口
+              ]
             });
-            (window as any).wx.ready(() => setWxReady(true));
+            (window as any).wx.ready(() => {
+              setWxReady(true);
+              // 配置分享信息
+              const shareData = {
+                title: 'LifePulse AI - 智能生活记录助手',
+                desc: '记录生活点滴，AI 帮你统计与分析。',
+                link: window.location.href.split('#')[0],
+                imgUrl: window.location.origin + '/pwa-192x192.png', // 使用 PWA 图标
+              };
+              
+              const wx = (window as any).wx;
+              // 新接口
+              if (wx.updateAppMessageShareData) wx.updateAppMessageShareData(shareData);
+              if (wx.updateTimelineShareData) wx.updateTimelineShareData(shareData);
+              
+              // 兼容旧版本接口，确保在某些环境下能显示卡片
+              if (wx.onMenuShareAppMessage) wx.onMenuShareAppMessage(shareData);
+              if (wx.onMenuShareTimeline) wx.onMenuShareTimeline(shareData);
+            });
             (window as any).wx.error((err: any) => {
               console.error('WeChat JS-SDK Error:', err);
               setWxReady(false);
@@ -389,6 +417,20 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
               </svg>
             </button>
 
+            {/* 微信转发按钮 */}
+            {isWeChat && (
+              <button
+                type="button"
+                onClick={() => setShowShareOverlay(true)}
+                className="p-2.5 rounded-xl bg-white text-slate-500 hover:text-indigo-600 shadow-sm border border-slate-100 transition-all"
+                title="转发给朋友"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                </svg>
+              </button>
+            )}
+
             {permissionDenied && (
               <div className="absolute top-full left-0 mt-2 w-max max-w-[200px] bg-red-50 text-red-500 text-xs p-2 rounded-lg border border-red-100 shadow-sm z-10 animate-in fade-in zoom-in-95 duration-200">
                 <p className="font-bold mb-1">无法通过语音录入</p>
@@ -405,15 +447,15 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
             )}
           </div>
 
-          <div className="relative">
+          <div className="relative flex-none">
             <button
               onClick={handleSubmit}
               disabled={!inputText.trim() || isProcessing}
-              className={`px-8 py-3 rounded-full font-bold text-white transition-all ${
+              className={`px-6 py-3 rounded-full font-bold text-white transition-all whitespace-nowrap ${
                 isProcessing ? 'bg-slate-400 cursor-wait' : 'bg-indigo-600 hover:bg-indigo-700 active:scale-95 shadow-lg shadow-indigo-100'
               }`}
             >
-              {isProcessing ? 'AI 分析中...' : '记录一下'}
+              {isProcessing ? '分析中' : '记录'}
             </button>
           </div>
         </div>
@@ -425,6 +467,44 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
         <QuickTip text="和莉莉喝了杯咖啡，很开心" onClick={setInputText} />
         <QuickTip text="读了 20 分钟书" onClick={setInputText} />
       </div>
+
+      {/* 微信分享引导蒙层 */}
+      {showShareOverlay && (
+        <div 
+          className="fixed inset-0 z-[100] bg-black/90 flex flex-col items-center justify-start pt-20 animate-in fade-in duration-200"
+          onClick={() => setShowShareOverlay(false)}
+        >
+          {/* 指示箭头 */}
+          <div className="absolute top-4 right-6 text-white flex flex-col items-end">
+             {/* 修正箭头的 SVG 路径，使其更形象地指向右上角菜单 */}
+             <svg className="w-16 h-16 animate-bounce text-white/90" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))' }}>
+               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 5h7m0 0v7m0-7L8 14" />
+             </svg>
+             <div className="mt-2 text-right bg-white/10 backdrop-blur-sm px-4 py-2 rounded-xl border border-white/20">
+               <p className="text-lg font-bold">点击右上角菜单</p>
+               <p className="text-xs opacity-80 mt-1">选择 "发送给朋友"</p>
+               <div className="flex gap-2 mt-2 justify-end">
+                   <div className="w-8 h-8 rounded bg-emerald-500/20 border border-emerald-500/50 flex items-center justify-center">
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+                   </div>
+               </div>
+             </div>
+          </div>
+          
+          <div className="text-white text-center px-10 mt-32">
+            <div className="w-20 h-20 bg-indigo-600 rounded-2xl mx-auto mb-6 shadow-2xl flex items-center justify-center">
+              <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
+            </div>
+            <h3 className="text-2xl font-bold mb-4 tracking-tight">邀请好友一起记录</h3>
+            <p className="mb-12 text-white/60 leading-relaxed text-sm">
+              让 AI 帮助你们发现生活中的小确幸。<br/>分享给朋友，一起开启智能生活记录。
+            </p>
+            <button className="px-8 py-3 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white font-medium hover:bg-white/20 transition-colors active:scale-95">
+              我知道了
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 游客限制弹窗 */}
       {showLimitModal && (
