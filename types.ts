@@ -20,6 +20,12 @@ export interface LogEntry {
   mood: string;
   importance: 1 | 2 | 3 | 4 | 5;
   tags?: string[];
+  images?: string[];
+  location?: {
+    name: string;
+    latitude?: number;
+    longitude?: number;
+  };
   createdAt?: number;
   updatedAt?: number;
 }

@@ -19,7 +19,7 @@ router.get('/', authenticateToken, async (req, res) => {
 // 添加新日志
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { rawText, activity, category, durationMinutes, mood, importance, timestamp, metadata } = req.body;
+    const { rawText, activity, category, durationMinutes, mood, importance, timestamp, metadata, images, location } = req.body;
     const log = await Log.create({
       userId: req.user.id,
       rawText,
@@ -29,7 +29,9 @@ router.post('/', authenticateToken, async (req, res) => {
       mood,
       importance,
       timestamp: timestamp || Date.now(),
-      metadata
+      metadata,
+      images,
+      location
     });
     res.status(201).json(log);
   } catch (error) {

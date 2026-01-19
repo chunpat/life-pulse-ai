@@ -38,11 +38,13 @@ const authRoutes = require('./routes/auth');
 const logRoutes = require('./routes/logs');
 const aiRoutes = require('./routes/ai');
 const financeRoutes = require('./routes/finance');
+const uploadRoutes = require('./routes/upload');
 const wechatRoutes = require('./routes/wechat');
 app.use('/api/auth', authRoutes);
 app.use('/api/logs', logRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/finance', financeRoutes);
+app.use('/api/upload', uploadRoutes);
 app.use('/api/wechat', wechatRoutes);
 
 // Health Check

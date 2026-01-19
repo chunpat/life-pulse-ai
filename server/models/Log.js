@@ -42,6 +42,15 @@ const Log = sequelize.define('Log', {
   metadata: {
     type: DataTypes.JSON,
     allowNull: true
+  },
+  images: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    defaultValue: []
+  },
+  location: {
+    type: DataTypes.JSON,
+    allowNull: true
   }
 }, {
   paranoid: true

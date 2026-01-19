@@ -390,12 +390,30 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
                   <p className="text-sm text-slate-400 mb-1">原始输入</p>
                   <p className="text-slate-800 font-medium italic">"{selectedLog.rawText}"</p>
                 </div>
+
+                {selectedLog.images && selectedLog.images.length > 0 && (
+                  <div className="mt-4">
+                    <p className="text-sm text-slate-400 mb-2">附件照片</p>
+                    <div className="flex gap-2 overflow-x-auto pb-2 snap-x">
+                      {selectedLog.images.map((url, idx) => (
+                        <div key={idx} className="flex-shrink-0 w-32 h-32 rounded-xl overflow-hidden border border-slate-100 snap-start">
+                          <img src={url} alt="Log attachment" className="w-full h-full object-cover" onClick={() => window.open(url, '_blank')} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4 mt-2">
                   <DetailItem label="活动" value={selectedLog.activity} />
                   <DetailItem label="分类" value={CATEGORY_MAP[selectedLog.category] || selectedLog.category} />
                   <DetailItem label="时长" value={`${selectedLog.durationMinutes} 分钟`} />
                   <DetailItem label="心情" value={selectedLog.mood} />
+                  <DetailItem 
+                    label="地理位置" 
+                    value={selectedLog.location?.name || '未知'} 
+                    className={selectedLog.location ? 'text-emerald-600 font-medium' : ''}
+                  />
                   <DetailItem label="重要程度" value={'★'.repeat(selectedLog.importance) + '☆'.repeat(5 - selectedLog.importance)} className="text-amber-400" />
                   <DetailItem label="记录时间" value={new Date(selectedLog.timestamp).toLocaleString('zh-CN')} />
                 </div>
@@ -486,7 +504,7 @@ const HistoryItem: React.FC<{
   };
 
   return (
-    <div className="relative h-[100px] select-none">
+    <div className="relative min-h-[100px] select-none">
       {/* Background Actions */}
       <div className="absolute inset-y-0 right-0 w-[80px] bg-red-500 rounded-2xl flex items-center justify-center p-2 z-0">
         <button 
@@ -504,15 +522,16 @@ const HistoryItem: React.FC<{
       {/* Foreground Content */}
       <div 
         ref={itemRef}
-        className="absolute inset-0 bg-white border border-slate-100 rounded-2xl p-4 shadow-sm hover:shadow-md transition-transform duration-300 ease-out z-10 flex flex-col justify-between"
+        className="relative bg-white border border-slate-100 rounded-2xl p-4 shadow-sm hover:shadow-md transition-transform duration-300 ease-out z-10 flex flex-col justify-between"
         style={{ transform: `translateX(${offsetX}px)` }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onDoubleClick={onDoubleClick}
+        onClick={() => offsetX !== 0 && setOffsetX(0)}
       >
         <div className="flex justify-between items-start">
-          <div>
+          <div className="flex-1 mr-4">
             <div className="flex items-center gap-2 mb-1">
                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${getCategoryColor(log.category)}`}>
               {CATEGORY_MAP[log.category] || log.category}
@@ -520,12 +539,31 @@ const HistoryItem: React.FC<{
                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md ${log.mood === '积极' || log.mood === '开心' ? 'bg-orange-50 text-orange-500' : 'bg-slate-50 text-slate-400'}`}>
                  {log.mood}
               </span>
+              {log.location && (
+                <span className="flex items-center gap-0.5 text-[10px] text-emerald-600 font-medium">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /></svg>
+                  {log.location.name}
+                </span>
+              )}
             </div>
-            <h3 className="font-bold text-slate-800 line-clamp-1 text-sm">{log.activity}</h3>
+            <h3 className="font-bold text-slate-800 line-clamp-2 text-sm leading-snug">{log.activity}</h3>
           </div>
-          <span className="text-xs font-semibold text-slate-400">
-            {new Date(log.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-          </span>
+          
+          <div className="flex flex-col items-end gap-2">
+            <span className="text-[10px] font-semibold text-slate-400">
+              {new Date(log.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+            {log.images && log.images.length > 0 && (
+              <div className="w-10 h-10 rounded-lg overflow-hidden border border-slate-100 shadow-sm relative">
+                <img src={log.images[0]} alt="Log" className="w-full h-full object-cover" />
+                {log.images.length > 1 && (
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-[10px] text-white font-bold">
+                    +{log.images.length - 1}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
         
         <div className="flex items-center gap-3 text-xs text-slate-500 mt-2">

@@ -3,6 +3,7 @@ import { LogEntry } from '../types';
 const STORAGE_KEY = 'lifepulse_logs_v1';
 const TOKEN_KEY = 'lifepulse_token';
 const API_BASE_URL = '/api/logs';
+const UPLOAD_API_URL = '/api/upload';
 
 const getAuthHeader = () => {
   const token = localStorage.getItem(TOKEN_KEY);
@@ -153,5 +154,26 @@ export const storageService = {
         console.error("Sync to cloud failed", e);
       }
     }
+  },
+
+  // 上传图片到腾讯云 COS
+  uploadImage: async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const response = await fetch(`${UPLOAD_API_URL}/image`, {
+      method: 'POST',
+      headers: getAuthHeader(),
+      body: formData
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || '图片上传失败');
+    }
+
+    const data = await response.json();
+    return data.url;
   }
 };
+
