@@ -98,6 +98,9 @@ router.get('/reverse-geocode', async (req, res) => {
     
     // 只有配置了 TIANDITU_TOKEN 且坐标在国内时，才优先使用天地图
     if (tk) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2500); // 2.5秒超时
+      
       try {
         const postStr = `{'lon':${lng},'lat':${lat},'ver':1}`;
         const tiandituUrl = `https://api.tianditu.gov.cn/geocoder?postStr=${encodeURIComponent(postStr)}&type=geocode&tk=${tk}`;
@@ -107,8 +110,9 @@ router.get('/reverse-geocode', async (req, res) => {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Referer': 'https://api.tianditu.gov.cn/'
           },
-          signal: AbortSignal.timeout(2500) // 缩短超时时间到 2.5 秒，方便快速降级
+          signal: controller.signal
         });
+        clearTimeout(timeoutId);
 
         const text = await response.text();
         
@@ -126,8 +130,9 @@ router.get('/reverse-geocode', async (req, res) => {
           return res.json({ address, source: 'tianditu' });
         }
       } catch (e) {
+        clearTimeout(timeoutId);
         // 如果是限流或超时，控制台记录，然后静默进入 OSM 逻辑
-        if (e.name === 'TimeoutError') {
+        if (e.name === 'AbortError') {
           console.warn('天地图请求超时，正在切换到备用定位方案...');
         } else {
           console.warn('天地图不可用 (可能是未认证限流):', e.message);
@@ -136,12 +141,17 @@ router.get('/reverse-geocode', async (req, res) => {
     }
 
     // 默认或备用方案：OpenStreetMap (OSM)
-    // 即使在国内，后端服务器通常也能访问 Nominatim
     try {
+      const osmController = new AbortController();
+      const osmTimeoutId = setTimeout(() => osmController.abort(), 4000);
+
       const osmUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&accept-language=zh-CN`;
       const response = await fetch(osmUrl, {
-        headers: { 'User-Agent': 'LifePulseAI-Server/1.0' }
+        headers: { 'User-Agent': 'LifePulseAI-Server/1.0' },
+        signal: osmController.signal
       });
+      clearTimeout(osmTimeoutId);
+      
       const data = await response.json();
       
       if (data && data.address) {
