@@ -44,3 +44,31 @@ export const getDailyInsight = async (logs: LogEntry[], period: 'day' | 'week' |
   const data = await response.json();
   return data.insight || "无法生成洞察";
 };
+
+export const getSmartSuggestions = async (logs: LogEntry[]): Promise<any> => {
+  if (logs.length === 0) return { suggestions: [] };
+
+  const now = new Date();
+  const currentHour = now.getHours();
+  const days = ['日', '一', '二', '三', '四', '五', '六'];
+  const currentWeekday = days[now.getDay()];
+
+  const response = await fetch(`${API_BASE_URL}/suggestions`, {
+    method: 'POST',
+    headers: {
+      ...getAuthHeader(),
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ 
+      logs: logs.slice(0, 50), // Send top 50 logs
+      currentHour,
+      currentWeekday
+    })
+  });
+
+  if (!response.ok) {
+    return { suggestions: [] };
+  }
+
+  return response.json();
+};

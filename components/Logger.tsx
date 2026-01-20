@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { parseLifeLog } from '../services/qwenService';
+import { parseLifeLog, getSmartSuggestions } from '../services/qwenService';
 import { createFinanceRecord } from '../services/financeService';
 import { storageService } from '../services/storageService';
 import { LogEntry } from '../types';
@@ -23,11 +23,12 @@ interface LoggerProps {
   onLogout: () => void;
   userId: string;
   isGuest?: boolean;
-  logsCount?: number;
+  logs: LogEntry[]; // Changed from logsCount to logs array
 }
 
-const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = false, logsCount = 0 }) => {
+const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = false, logs }) => {
   const [inputText, setInputText] = useState('');
+  const [suggestion, setSuggestion] = useState<{content: string, type: string, trigger: string} | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
@@ -41,6 +42,41 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
   const [showShareOverlay, setShowShareOverlay] = useState(false);
   const recognitionRef = useRef<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch Smart Suggestions
+  useEffect(() => {
+    if (isGuest || logs.length === 0) return;
+
+    // Check localStorage to avoid spamming the API (limit to once per 4 hours)
+    const lastFetch = localStorage.getItem('last_suggestion_fetch');
+    const now = Date.now();
+    if (lastFetch && now - parseInt(lastFetch) < 4 * 60 * 60 * 1000) {
+      const savedSuggestion = localStorage.getItem('current_suggestion');
+      if (savedSuggestion) {
+        setSuggestion(JSON.parse(savedSuggestion));
+      }
+      return;
+    }
+
+    const fetchSuggestion = async () => {
+      try {
+        const res = await getSmartSuggestions(logs);
+        if (res.suggestions && res.suggestions.length > 0) {
+          const mainSuggestion = res.suggestions[0];
+          setSuggestion(mainSuggestion);
+          // Cache it
+          localStorage.setItem('last_suggestion_fetch', now.toString());
+          localStorage.setItem('current_suggestion', JSON.stringify(mainSuggestion));
+        }
+      } catch (e) {
+        console.error("Failed to fetch suggestions", e);
+      }
+    };
+    
+    // Delay slightly to not block initial render
+    const timer = setTimeout(fetchSuggestion, 2000);
+    return () => clearTimeout(timer);
+  }, [logs.length, isGuest]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -356,6 +392,34 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      
+      {suggestion && (
+        <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex items-start gap-3 relative overflow-hidden group">
+          <div className="p-2 bg-indigo-100 rounded-lg text-xl flex-none">
+            {suggestion.type === 'health' ? '🌿' : 
+             suggestion.type === 'productivity' ? '🚀' : 
+             suggestion.type === 'work_life_balance' ? '⚖️' : '💡'}
+          </div>
+          <div className="flex-1 z-10">
+            <h4 className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-0.5">智能提醒</h4>
+            <p className="text-sm font-medium text-slate-700 leading-snug">{suggestion.content}</p>
+          </div>
+          <button 
+            onClick={() => {
+              setSuggestion(null);
+              // Clear cache so it doesn't reappear immediately
+              localStorage.removeItem('current_suggestion');
+            }} 
+            className="text-slate-300 hover:text-slate-500 z-10 p-1"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+          
+          {/* Decor background */}
+          <div className="absolute -right-4 -bottom-4 w-16 h-16 bg-white/40 rounded-full blur-xl group-hover:bg-indigo-200/20 transition-colors"></div>
+        </div>
+      )}
+
       <div className="bg-white border border-slate-200 rounded-[2rem] p-5 shadow-sm hover:shadow-md transition-shadow relative">
         <textarea
           value={inputText}

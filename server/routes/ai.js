@@ -125,4 +125,58 @@ JSON 结构要求：
   }
 });
 
+// 获取智能生活建议 (基于历史习惯)
+router.post('/suggestions', authenticateToken, async (req, res) => {
+  try {
+    const { logs, currentHour, currentWeekday } = req.body;
+    
+    if (!logs || !Array.isArray(logs)) return res.status(400).json({ message: '数据格式错误' });
+    if (!apiKey) return res.status(500).json({ message: 'AI API Key 未配置' });
+
+    // 只取最近 50 条记录避免 Token 溢出，重点看时间戳最近的
+    const recentLogs = logs.slice(0, 50).map(l => 
+      `[${new Date(l.timestamp).toLocaleDateString()} ${l.category}] ${l.activity} (${l.durationMinutes}m)`
+    ).join('\n');
+
+    const response = await client.chat.completions.create({
+      model: modelName,
+      messages: [
+        {
+          role: "system",
+          content: `你是一个贴心的生活管家。请根据用户最近的活动日志，结合当前时间（星期${currentWeekday}，${currentHour}点），提供 1-2 条暖心的生活平衡建议。
+          
+关注点：
+1. 是否过度劳累（连续长时间工作）？
+2. 是否缺乏运动或休闲？
+3. 作息是否规律？
+4. 如果当前是深夜，提醒休息；如果是周末，建议放松。
+
+请直接返回 JSON 格式：
+{
+  "suggestions": [
+    { 
+      "id": "gen-id",
+      "type": "health" | "work_life_balance" | "productivity" | "other",
+      "content": "建议内容，语气要像朋友一样自然温暖 (20字以内)",
+      "trigger": "触发原因 (例如：检测到连续3天熬夜)"
+    }
+  ]
+}`
+        },
+        {
+          role: "user",
+          content: `最近活动记录：\n${recentLogs}\n\n当前状态：今天是星期${currentWeekday}，现在是${currentHour}点。请给出建议。`
+        }
+      ],
+      response_format: { type: "json_object" }
+    });
+
+    res.json(JSON.parse(response.choices[0].message.content || '{"suggestions": []}'));
+
+  } catch (error) {
+    console.error("AI Suggestion Error:", error);
+    res.status(500).json({ message: '生成建议失败', error: error.message });
+  }
+});
+
 module.exports = router;

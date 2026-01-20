@@ -164,7 +164,7 @@ const App: React.FC = () => {
           onLogout={handleLogout}
           userId={user.id} 
           isGuest={user.status === 'guest'}
-          logsCount={logs.length}
+          logs={logs}
         />
       )}
       {view === ViewMode.TIMELINE && (
