@@ -25,28 +25,90 @@ const CATEGORY_MAP: Record<string, string> = {
 const Analytics: React.FC<AnalyticsProps> = ({ 
   logs, 
   isGuest = false,
-  insight,
-  isGenerating,
+  insight: defaultInsight,
+  isGenerating: isDefaultGenerating,
   onLoginClick
 }) => {
+  const [period, setPeriod] = useState<'day' | 'week' | 'month'>('day');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [customInsight, setCustomInsight] = useState<string | null>(null);
+  const [isAnalysing, setIsAnalysing] = useState(false);
+
+  // Helper to determine date range
+  const dateRange = useMemo(() => {
+    const start = new Date(selectedDate);
+    const end = new Date(selectedDate);
+    
+    if (period === 'week') {
+      const day = start.getDay() || 7; // Make Sunday 7
+      start.setDate(start.getDate() - day + 1); // Monday
+      end.setDate(start.getDate() + 6); // Sunday
+    } else if (period === 'month') {
+      start.setDate(1);
+      end.setMonth(end.getMonth() + 1);
+      end.setDate(0);
+    }
+    
+    // Reset hours for accurate comparison
+    start.setHours(0,0,0,0);
+    end.setHours(23,59,59,999);
+    
+    return { start, end };
+  }, [selectedDate, period]);
 
   const filteredLogs = useMemo(() => {
     return logs.filter(log => {
-      const logDate = new Date(log.timestamp).toISOString().split('T')[0];
-      return logDate === selectedDate;
+      const logTime = new Date(log.timestamp).getTime();
+      return logTime >= dateRange.start.getTime() && logTime <= dateRange.end.getTime();
     });
-  }, [logs, selectedDate]);
+  }, [logs, dateRange]);
+
+  const handleGenerateReport = async () => {
+    if (isGuest || filteredLogs.length === 0) return;
+    setIsAnalysing(true);
+    try {
+      const { getDailyInsight } = await import('../services/qwenService');
+      const res = await getDailyInsight(filteredLogs, period);
+      setCustomInsight(res);
+    } catch (e) {
+      console.error(e);
+      setCustomInsight("报告生成失败，请稍后再试");
+    } finally {
+      setIsAnalysing(false);
+    }
+  };
+
+  // Reset custom insight when filters change
+  useEffect(() => {
+    setCustomInsight(null);
+  }, [period, selectedDate]);
+
+  const currentInsight = customInsight || (period === 'day' && selectedDate === new Date().toISOString().split('T')[0] ? defaultInsight : null);
+  const isGenerating = isAnalysing || (period === 'day' && selectedDate === new Date().toISOString().split('T')[0] && isDefaultGenerating);
 
   const displayInsight = useMemo(() => {
     if (isGuest) return "游客模式暂不支持 AI 深度总结。登录后可享受全天候自动洞察、趋势分析及数据备份功能！";
-    if (selectedDate !== new Date().toISOString().split('T')[0]) {
-      return "目前的 AI 每日洞察专注于分析最近记录的内容。如需历史回顾，请查看时间轴。";
+    
+    if (isGenerating) return "正在分析你的生活数据...";
+    
+    if (currentInsight) return currentInsight;
+
+    if (filteredLogs.length === 0) return "该时段没有记录内容，无法进行分析。";
+    
+    return "点击下方按钮，生成深度分析报告";
+  }, [isGuest, filteredLogs.length, isGenerating, currentInsight]);
+
+  const parsedContent = useMemo(() => {
+    try {
+      if (!currentInsight || typeof currentInsight !== 'string') return null;
+      if (currentInsight.trim().startsWith('{')) {
+        return JSON.parse(currentInsight);
+      }
+      return null;
+    } catch {
+      return null;
     }
-    if (filteredLogs.length === 0) return "今天还没有记录任何内容，AI 将在你记录后为你分析时间去向。";
-    if (isGenerating) return "正在整合你的数据...";
-    return insight || "正在准备 AI 洞察...";
-  }, [isGuest, filteredLogs.length, isGenerating, insight, selectedDate]);
+  }, [currentInsight]);
 
   const categoryData = useMemo(() => {
     const map: Record<string, number> = {};
@@ -65,45 +127,102 @@ const Analytics: React.FC<AnalyticsProps> = ({
   const mins = totalTime % 60;
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-left-4 duration-500 pb-10">
-      {/* Date Selector */}
-      <div className="flex items-center justify-between bg-white border border-slate-100 rounded-2xl p-4 shadow-sm">
-        <span className="text-sm font-bold text-slate-700">分析日期</span>
-        <input 
-          type="date" 
-          value={selectedDate}
-          onChange={(e) => setSelectedDate(e.target.value)}
-          className="bg-slate-50 border-none rounded-xl text-sm font-medium text-slate-800 focus:ring-2 focus:ring-indigo-500/20 outline-none p-2"
-        />
+    <div className="space-y-6 animate-in fade-in slide-in-from-left-4 duration-500 pb-10">
+      {/* Filters */}
+      <div className="bg-white border border-slate-100 rounded-2xl p-2 shadow-sm flex flex-col gap-2">
+        {/* Period Tabs */}
+        <div className="flex bg-slate-100 p-1 rounded-xl">
+          {(['day', 'week', 'month'] as const).map((p) => (
+             <button
+               key={p}
+               onClick={() => setPeriod(p)}
+               className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                 period === p ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+               }`}
+             >
+               {{day: '日', week: '周', month: '月'}[p]}试图
+             </button>
+          ))}
+        </div>
+
+        {/* Date Selector */}
+        <div className="flex items-center justify-between px-2 pb-1">
+          <span className="text-xs font-bold text-slate-500">
+             {period === 'day' && '选择日期'}
+             {period === 'week' && '选择周 (选该周任意一天)'}
+             {period === 'month' && '选择月份 (选该月任意一天)'}
+          </span>
+          <input 
+            type="date" 
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="bg-transparent text-sm font-bold text-slate-800 outline-none text-right"
+          />
+        </div>
       </div>
 
       {/* AI Card */}
-      <div className="bg-indigo-600 rounded-3xl p-6 text-white shadow-xl shadow-indigo-100 relative overflow-hidden">
-        <div className="relative z-10">
-          <div className="flex items-center gap-2 mb-3">
-            <svg className="w-5 h-5 text-indigo-200" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71L12 2z"/></svg>
-            <span className="text-xs font-bold uppercase tracking-widest text-indigo-200">
-              {selectedDate === new Date().toISOString().split('T')[0] ? '每日洞察' : '历史回顾'}
-            </span>
+      <div className="bg-indigo-600 rounded-3xl p-6 text-white shadow-xl shadow-indigo-100 relative overflow-hidden transition-all duration-300 hover:shadow-indigo-300/50">
+        <div className="relative z-10 w-full animate-in fade-in zoom-in-95 duration-500">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-indigo-500/50 rounded-lg backdrop-blur-sm">
+                  <svg className="w-5 h-5 text-indigo-100" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71L12 2z"/></svg>
+              </div>
+              <span className="text-xs font-bold uppercase tracking-widest text-indigo-200">
+                AI {period === 'day' ? '每日' : period === 'week' ? '周度' : '月度'}洞察
+              </span>
+            </div>
+            
+            {!currentInsight && !isGenerating && filteredLogs.length > 0 && !isGuest && (
+                 <button 
+                  onClick={handleGenerateReport}
+                  className="px-3 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-bold border border-white/30 transition-all flex items-center gap-1"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                  生成报告
+                </button>
+            )}
           </div>
-          <p className="text-lg leading-relaxed font-medium">
-            {displayInsight}
-          </p>
+
+          {parsedContent ? (
+             <div className="space-y-4">
+                <div className="text-lg font-bold leading-relaxed border-l-4 border-indigo-400 pl-3">
+                   {parsedContent.summary}
+                </div>
+                <div className="space-y-2.5 mt-2">
+                   {parsedContent.bulletPoints?.map((pt: any, idx: number) => (
+                      <div key={idx} className="flex items-start gap-3 bg-white/10 rounded-xl p-3 backdrop-blur-sm border border-white/5">
+                         <span className="text-lg select-none">{pt.icon}</span>
+                         <span className="text-sm font-medium opacity-90 leading-snug pt-0.5">{pt.text}</span>
+                      </div>
+                   ))}
+                </div>
+             </div>
+          ) : (
+            <p className="text-lg leading-relaxed font-medium">
+              {displayInsight}
+            </p>
+          )}
+
           {isGuest && onLoginClick && (
             <button 
               onClick={onLoginClick}
-              className="mt-4 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-xl text-sm font-bold transition-colors border border-white/30"
+              className="mt-6 w-full py-3 bg-white text-indigo-600 hover:bg-indigo-50 rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-900/20"
             >
-              立即登录 / 注册
+              解锁完整 AI 分析
             </button>
           )}
         </div>
-        <div className="absolute top-[-10%] right-[-10%] w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
+        
+        {/* Background Decor */}
+        <div className="absolute top-[-20%] right-[-20%] w-64 h-64 bg-indigo-500/30 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-[-10%] left-[-10%] w-40 h-40 bg-purple-500/20 rounded-full blur-3xl"></div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <StatCard label="统计时长" value={`${hours}时 ${mins}分`} sub={selectedDate === new Date().toISOString().split('T')[0] ? '今日统计' : '所选日统计'} />
-        <StatCard label="活动项目" value={filteredLogs.length.toString()} sub="记录项数" />
+        <StatCard label="统计时长" value={`${Math.floor(totalTime / 60)}时 ${totalTime % 60}分`} sub={period === 'day' ? '今日统计' : period === 'week' ? '本周统计' : '本月统计'} />
+        <StatCard label="活动项目" value={filteredLogs.length.toString()} sub="总记录数" />
       </div>
 
       {/* Chart */}

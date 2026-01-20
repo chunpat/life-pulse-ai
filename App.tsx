@@ -20,6 +20,7 @@ const App: React.FC = () => {
   const [newLogAdded, setNewLogAdded] = useState(false);
   const [dailyInsight, setDailyInsight] = useState<string>('');
   const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
   const lastAnalyzedFingerprint = React.useRef<string>('');
 
   // 初始化用户状态
@@ -36,6 +37,13 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!user) return;
     
+    // Check for first-time guide
+    const hasSeenGuide = localStorage.getItem('hasSeenGuide_v1');
+    if (!hasSeenGuide) {
+      // Small delay to ensure layout is ready
+      setTimeout(() => setShowGuide(true), 500);
+    }
+
     const fetchLogs = async () => {
       const data = await storageService.getLogs();
       setLogs(data);
@@ -71,6 +79,11 @@ const App: React.FC = () => {
     setUser(null);
     localStorage.removeItem(GUEST_STORAGE_USER);
     localStorage.removeItem(AUTH_TOKEN);
+  };
+
+  const handleCloseGuide = () => {
+    setShowGuide(false);
+    localStorage.setItem('hasSeenGuide_v1', 'true');
   };
 
   const addLog = useCallback(async (entry: LogEntry) => {
@@ -142,6 +155,8 @@ const App: React.FC = () => {
       newLogAdded={newLogAdded}
       userName={user.name}
       onLogout={handleLogout}
+      showGuide={showGuide}
+      onCloseGuide={handleCloseGuide}
     >
       {view === ViewMode.LOGGER && (
         <Logger 

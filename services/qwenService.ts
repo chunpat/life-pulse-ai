@@ -25,8 +25,8 @@ export const parseLifeLog = async (text: string): Promise<ParseResult> => {
   return response.json();
 };
 
-export const getDailyInsight = async (logs: LogEntry[]): Promise<string> => {
-  if (logs.length === 0) return "开始记录你的第一条内容，获取 AI 洞察！";
+export const getDailyInsight = async (logs: LogEntry[], period: 'day' | 'week' | 'month' = 'day'): Promise<string> => {
+  if (logs.length === 0) return JSON.stringify({ summary: "暂无数据", bulletPoints: [] });
   
   const response = await fetch(`${API_BASE_URL}/insight`, {
     method: 'POST',
@@ -34,7 +34,7 @@ export const getDailyInsight = async (logs: LogEntry[]): Promise<string> => {
       ...getAuthHeader(),
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ logs })
+    body: JSON.stringify({ logs, period })
   });
 
   if (!response.ok) {

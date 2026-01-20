@@ -71,10 +71,11 @@ router.post('/parse', async (req, res) => {
   }
 });
 
-// 获取每日洞察
+// 获取洞察 (每日/周/月)
 router.post('/insight', authenticateToken, async (req, res) => {
   try {
-    const { logs } = req.body;
+    // period: 'day' | 'week' | 'month' (default: 'day')
+    const { logs, period = 'day' } = req.body;
     if (!logs || !Array.isArray(logs)) return res.status(400).json({ message: '数据格式错误' });
 
     if (!apiKey) {
@@ -82,18 +83,42 @@ router.post('/insight', authenticateToken, async (req, res) => {
     }
 
     const logSummary = logs.map(l => `${l.activity} (耗时 ${l.durationMinutes}分钟, 类别 ${l.category})`).join(', ');
+
+    const periodTextMap = {
+      'day': '一天',
+      'week': '一周',
+      'month': '一月'
+    };
+    const periodText = periodTextMap[period] || '一段时间';
   
     const response = await client.chat.completions.create({
       model: modelName,
       messages: [
         {
+          role: "system",
+          content: `你是一个敏锐的生活数据分析师。请回顾用户${periodText}的活动日志，并返回 JSON 格式的分析报告。
+请不要使用 Markdown 格式，直接返回 JSON 对象。
+
+JSON 结构要求：
+{
+  "summary": "一句简短的总结 (30字以内，要有如'高效充实的${periodText}'这种定性)",
+  "bulletPoints": [
+    { "icon": "👍", "text": "做得好的地方 (例如：坚持了运动习惯)" },
+    { "icon": "📊", "text": "时间分配简评 (例如：工作时长占比过高)" },
+    { "icon": "💡", "text": "具体的改进建议 (例如：建议增加每小时的短暂休息)" }
+  ]
+}
+确保 bulletPoints 数组至少包含 3 条内容。`
+        },
+        {
           role: "user",
-          content: `请回顾我的一天并提供一段简短、激励人心且具有分析性的中文总结，告诉我的时间都花在哪了，以及如何改进： ${logSummary}`
+          content: `我的${periodText}活动：${logSummary}`
         }
-      ]
+      ],
+      response_format: { type: "json_object" }
     });
   
-    res.json({ insight: response.choices[0].message.content || "无法生成洞察" });
+    res.json({ insight: response.choices[0].message.content || "{}" });
   } catch (error) {
     console.error("AI Insight Error:", error);
     res.status(500).json({ message: '生成洞察失败', error: error.message });
