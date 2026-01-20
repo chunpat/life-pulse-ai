@@ -99,9 +99,26 @@ router.get('/reverse-geocode', async (req, res) => {
     // 只有配置了 TIANDITU_TOKEN 且坐标在国内时，才优先使用天地图
     if (tk) {
       try {
-        const tiandituUrl = `http://api.tianditu.gov.cn/geocoder?postStr={'lon':${lng},'lat':${lat},'ver':1}&type=geocode&tk=${tk}`;
-        const response = await fetch(tiandituUrl);
-        const data = await response.json();
+        const postStr = `{'lon':${lng},'lat':${lat},'ver':1}`;
+        const tiandituUrl = `https://api.tianditu.gov.cn/geocoder?postStr=${encodeURIComponent(postStr)}&type=geocode&tk=${tk}`;
+        
+        const response = await fetch(tiandituUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Referer': 'https://api.tianditu.gov.cn/'
+          },
+          signal: AbortSignal.timeout(2500) // 缩短超时时间到 2.5 秒，方便快速降级
+        });
+
+        const text = await response.text();
+        
+        // 天地图限流或未认证时常返回 HTML 错误页，此时 text 以 < 开头
+        if (text.trim().startsWith('<')) {
+          console.warn('天地图可能触发了限流或 Key 无效，准备切换到 OSM...');
+          throw new Error('TIANDITU_LIMIT_OR_HTML');
+        }
+
+        const data = JSON.parse(text);
         
         if (data.status === '0' && data.result) {
           const addr = data.result.addressComponent;
@@ -109,7 +126,12 @@ router.get('/reverse-geocode', async (req, res) => {
           return res.json({ address, source: 'tianditu' });
         }
       } catch (e) {
-        console.warn('天地图响应异常，降级到 OSM:', e.message);
+        // 如果是限流或超时，控制台记录，然后静默进入 OSM 逻辑
+        if (e.name === 'TimeoutError') {
+          console.warn('天地图请求超时，正在切换到备用定位方案...');
+        } else {
+          console.warn('天地图不可用 (可能是未认证限流):', e.message);
+        }
       }
     }
 

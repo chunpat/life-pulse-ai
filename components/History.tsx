@@ -531,18 +531,18 @@ const HistoryItem: React.FC<{
         onClick={() => offsetX !== 0 && setOffsetX(0)}
       >
         <div className="flex justify-between items-start">
-          <div className="flex-1 mr-4">
-            <div className="flex items-center gap-2 mb-1">
-               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${getCategoryColor(log.category)}`}>
+          <div className="flex-1 min-w-0 mr-4">
+            <div className="flex items-center gap-2 mb-1.5 overflow-hidden">
+               <span className={`flex-none text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${getCategoryColor(log.category)}`}>
               {CATEGORY_MAP[log.category] || log.category}
               </span>
-               <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md ${log.mood === '积极' || log.mood === '开心' ? 'bg-orange-50 text-orange-500' : 'bg-slate-50 text-slate-400'}`}>
+               <span className={`flex-none text-[10px] font-medium px-1.5 py-0.5 rounded-md ${log.mood === '积极' || log.mood === '开心' ? 'bg-orange-50 text-orange-500' : 'bg-slate-50 text-slate-400'}`}>
                  {log.mood}
               </span>
               {log.location && (
-                <span className="flex items-center gap-0.5 text-[10px] text-emerald-600 font-medium">
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /></svg>
-                  {log.location.name}
+                <span className="flex items-center gap-0.5 text-[10px] text-emerald-600 font-medium truncate min-w-0">
+                  <svg className="w-3 h-3 flex-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /></svg>
+                  <span className="truncate">{log.location.name}</span>
                 </span>
               )}
             </div>

@@ -157,15 +157,23 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
             (window as any).wx.ready(() => {
               setWxReady(true);
               
+              // 获取当前不带参数的完整 URL，确保与 JS 接口安全域名匹配
+              const currentUrl = window.location.href.split('#')[0];
+              
               const shareData = {
                 title: 'LifePulse AI - 智能生活记录助手',
-                desc: '记录生活点滴，AI 帮你统计与分析。',
-                link: window.location.href.split('#')[0],
-                imgUrl: window.location.origin + '/pwa-192x192.png',
+                desc: 'AI 帮你统计与分析生活点滴。',
+                link: currentUrl,
+                // 图片建议使用 300x300 及以上，绝对路径，且不能是透明背景的 PNG（白色背景更稳）
+                imgUrl: window.location.origin + '/pwa-512x512.png', 
+                success: function() {
+                  console.log('分享接口调用成功');
+                }
               };
               
               const wx = (window as any).wx;
               
+              // 必须严格按照微信官方要求，先调用新接口，再兼容旧接口
               if (wx.updateAppMessageShareData) {
                 wx.updateAppMessageShareData(shareData);
               }
@@ -173,11 +181,13 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
                 wx.updateTimelineShareData(shareData);
               }
               
+              // 即使是认证过的号，旧接口在某些老版本微信或特定环境下依然是生效的关键
               if (wx.onMenuShareAppMessage) wx.onMenuShareAppMessage(shareData);
               if (wx.onMenuShareTimeline) wx.onMenuShareTimeline(shareData);
             });
             (window as any).wx.error((err: any) => {
               console.error('WeChat JS-SDK Error:', err);
+              // alert(`微信 SDK 错误: ${JSON.stringify(err)}`);
               setWxReady(false);
             });
           }
@@ -370,12 +380,12 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
               </div>
             ))}
             {currentLocation && (
-              <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 text-[11px] font-bold rounded-full border border-emerald-100 animate-fade-in">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 text-[11px] font-bold rounded-full border border-emerald-100 animate-fade-in max-w-full">
+                <svg className="w-3.5 h-3.5 flex-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                 </svg>
-                <span className="max-w-[100px] truncate">{currentLocation.name}</span>
-                <button type="button" onClick={() => setCurrentLocation(undefined)} className="hover:text-emerald-900 ml-1">×</button>
+                <span className="truncate">{currentLocation.name}</span>
+                <button type="button" onClick={() => setCurrentLocation(undefined)} className="hover:text-emerald-900 ml-1 flex-none text-sm leading-none">×</button>
               </div>
             )}
           </div>
