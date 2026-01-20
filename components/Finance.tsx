@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { FinanceRecord } from '../types';
 import { fetchFinanceRecords, fetchFinanceStats, deleteFinanceRecord } from '../services/financeService';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
@@ -12,6 +13,7 @@ type FilterType = 'WEEK' | 'MONTH' | 'ALL';
 const COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#f43f5e'];
 
 const Finance: React.FC<FinanceProps> = ({ userId }) => {
+  const { t } = useTranslation();
   const [records, setRecords] = useState<FinanceRecord[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -75,12 +77,12 @@ const Finance: React.FC<FinanceProps> = ({ userId }) => {
   }, [stats]);
 
   const handleDelete = async (id: string) => {
-      if(!confirm('确定删除?')) return;
+      if(!confirm(t('finance.delete_confirm'))) return;
       try {
           await deleteFinanceRecord(id);
           loadData();
       } catch(e) {
-          alert('删除失败');
+          alert(t('finance.delete_failed'));
       }
   };
 
@@ -88,7 +90,7 @@ const Finance: React.FC<FinanceProps> = ({ userId }) => {
       return (
           <div className="flex flex-col items-center justify-center p-20 space-y-4">
               <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-              <p className="text-xs font-bold text-slate-400">正在分析订单...</p>
+              <p className="text-xs font-bold text-slate-400">{t('finance.loading')}</p>
           </div>
       );
   }
@@ -96,17 +98,17 @@ const Finance: React.FC<FinanceProps> = ({ userId }) => {
   return (
       <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
         <header className="flex justify-between items-center">
-            <h2 className="text-2xl font-bold text-slate-800">财务账本</h2>
+            <h2 className="text-2xl font-bold text-slate-800">{t('finance.title')}</h2>
             <div className="flex bg-slate-100 p-1 rounded-xl">
-                {(['WEEK', 'MONTH', 'ALL'] as FilterType[]).map(t => (
+                {(['WEEK', 'MONTH', 'ALL'] as FilterType[]).map(tType => (
                     <button
-                        key={t}
-                        onClick={() => setFilter(t)}
+                        key={tType}
+                        onClick={() => setFilter(tType)}
                         className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
-                            filter === t ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'
+                            filter === tType ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'
                         }`}
                     >
-                        {t === 'WEEK' ? '本周' : t === 'MONTH' ? '本月' : '全部'}
+                        {tType === 'WEEK' ? t('finance.filter.week') : tType === 'MONTH' ? t('finance.filter.month') : t('finance.filter.all')}
                     </button>
                 ))}
             </div>
@@ -116,11 +118,11 @@ const Finance: React.FC<FinanceProps> = ({ userId }) => {
         {stats && (
             <div className="grid grid-cols-2 gap-4">
                 <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
-                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">总收入</div>
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">{t('finance.total_income')}</div>
                     <div className="text-xl font-black text-emerald-500">¥{stats.totalIncome.toFixed(2)}</div>
                 </div>
                 <div className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm">
-                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">总支出</div>
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">{t('finance.total_expense')}</div>
                     <div className="text-xl font-black text-rose-500">¥{stats.totalExpense.toFixed(2)}</div>
                 </div>
             </div>
@@ -129,7 +131,7 @@ const Finance: React.FC<FinanceProps> = ({ userId }) => {
         {/* Charts Section */}
         {chartData.length > 0 && (
             <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-                <h3 className="text-sm font-bold text-slate-800 mb-4">支出分类占比</h3>
+                <h3 className="text-sm font-bold text-slate-800 mb-4">{t('finance.chart_expense_category')}</h3>
                 <div className="h-[200px] w-full">
                     <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
@@ -169,8 +171,8 @@ const Finance: React.FC<FinanceProps> = ({ userId }) => {
         {/* List */}
         <div className="space-y-4">
             <div className="flex justify-between items-center px-1">
-                <h3 className="text-sm font-bold text-slate-800">记账清单</h3>
-                <span className="text-[10px] font-bold text-slate-400">{records.length} 笔记录</span>
+                <h3 className="text-sm font-bold text-slate-800">{t('finance.list_title')}</h3>
+                <span className="text-[10px] font-bold text-slate-400">{records.length} {t('finance.list_count_suffix') || ''}</span>
             </div>
             <div className="space-y-3">
                 {records.map(record => (
@@ -189,7 +191,7 @@ const Finance: React.FC<FinanceProps> = ({ userId }) => {
                                     )}
                                 </div>
                                 <div className="text-[10px] font-bold text-slate-400">
-                                    {new Date(record.transactionDate).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                    {new Date(record.transactionDate).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                                 </div>
                             </div>
                         </div>
@@ -215,7 +217,7 @@ const Finance: React.FC<FinanceProps> = ({ userId }) => {
                     <div className="bg-slate-50/50 border-2 border-dashed border-slate-200 rounded-3xl p-10 text-center">
                         <div className="text-3xl mb-2">📒</div>
                         <p className="text-xs font-bold text-slate-400">
-                            {filter === 'WEEK' ? '本周' : filter === 'MONTH' ? '本月' : '当前'}暂无记录
+                            {filter === 'WEEK' ? t('finance.no_records.week') : filter === 'MONTH' ? t('finance.no_records.month') : t('finance.no_records.all')}
                         </p>
                     </div>
                 )}

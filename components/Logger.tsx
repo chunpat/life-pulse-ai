@@ -1,5 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { parseLifeLog, getSmartSuggestions } from '../services/qwenService';
 import { createFinanceRecord } from '../services/financeService';
 import { storageService } from '../services/storageService';
@@ -27,6 +28,7 @@ interface LoggerProps {
 }
 
 const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = false, logs }) => {
+  const { t } = useTranslation();
   const [inputText, setInputText] = useState('');
   const [suggestion, setSuggestion] = useState<{content: string, type: string, trigger: string} | null>(null);
   const [isListening, setIsListening] = useState(false);
@@ -401,7 +403,7 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
              suggestion.type === 'work_life_balance' ? '⚖️' : '💡'}
           </div>
           <div className="flex-1 z-10">
-            <h4 className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-0.5">智能提醒</h4>
+            <h4 className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-0.5">{t('logger.smart_suggestion')}</h4>
             <p className="text-sm font-medium text-slate-700 leading-snug">{suggestion.content}</p>
           </div>
           <button 
@@ -424,7 +426,7 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
         <textarea
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
-          placeholder="刚才做了什么？（例如：'写代码 2 小时，感觉非常高效！'）"
+          placeholder={t('logger.placeholder')}
           className="w-full bg-transparent border-none focus:ring-0 text-lg text-slate-800 placeholder:text-slate-400 min-h-[100px] pb-12 resize-none"
         />
         
@@ -467,7 +469,7 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
                     ? 'bg-red-50 text-red-400' 
                     : 'bg-white text-slate-500 hover:text-indigo-600 hover:bg-white shadow-sm border border-slate-100'
               }`}
-              title={isListening ? "停止录音" : "语音录入"}
+              title={isListening ? t('logger.stop_recording') : t('logger.voice_input')}
             >
               <svg className="w-5 h-5 flex-none" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
             </button>
@@ -485,7 +487,7 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploading}
               className={`flex-none p-2.5 rounded-xl bg-white text-slate-500 hover:text-indigo-600 shadow-sm border border-slate-100 transition-all ${isUploading ? 'animate-pulse' : ''}`}
-              title="上传图片"
+              title={t('logger.upload_image')}
             >
               {isUploading ? (
                 <svg className="w-5 h-5 animate-spin flex-none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
@@ -502,7 +504,7 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
               onClick={captureLocation}
               disabled={isGettingLocation}
               className={`flex-none p-2.5 rounded-xl transition-all shadow-sm border border-slate-100 ${currentLocation ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-white text-slate-500 hover:text-indigo-600 transition-colors'} ${isGettingLocation ? 'animate-bounce' : ''}`}
-              title="获取地点"
+              title={t('logger.capture_location')}
             >
               <svg className="w-5 h-5 flex-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -516,7 +518,7 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
                 type="button"
                 onClick={() => setShowShareOverlay(true)}
                 className="flex-none p-2.5 rounded-xl bg-white text-slate-500 hover:text-indigo-600 shadow-sm border border-slate-100 transition-all"
-                title="转发给朋友"
+                title={t('logger.share')}
               >
                 <svg className="w-5 h-5 flex-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
@@ -526,15 +528,15 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
 
             {permissionDenied && (
               <div className="absolute top-full left-0 mt-2 w-max max-w-[200px] bg-red-50 text-red-500 text-xs p-2 rounded-lg border border-red-100 shadow-sm z-10 animate-in fade-in zoom-in-95 duration-200">
-                <p className="font-bold mb-1">无法通过语音录入</p>
+                <p className="font-bold mb-1">{t('logger.voice_error_title')}</p>
                 {isWeChat ? (
                   wxReady ? (
-                    <span>微信录音启动失败。请确保您已授权微信访问麦克风。</span>
+                    <span>{t('logger.wechat_error')}</span>
                   ) : (
-                    <span>检测到微信环境。通常 iOS 微信会拦截网页原生语音接口。您可以点击右上角<b>“在 Safari 中打开”</b>，或确保系统已正确配置并授权微信 JS-SDK。</span>
+                    <span>{t('logger.wechat_hint')}</span>
                   )
                 ) : (
-                  <span>请点击地址栏的 🔒 或设置图标开启麦克风权限，然后点击此按钮重试。</span>
+                  <span>{t('logger.browser_voice_hint')}</span>
                 )}
               </div>
             )}
@@ -548,17 +550,17 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
                 isProcessing ? 'bg-slate-400 cursor-wait' : 'bg-indigo-600 hover:bg-indigo-700 active:scale-95 shadow-lg shadow-indigo-100'
               }`}
             >
-              {isProcessing ? '分析中' : '记录'}
+              {isProcessing ? t('logger.processing') : t('logger.submit')}
             </button>
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <QuickTip text="在健身房锻炼了 30 分钟" onClick={setInputText} />
-        <QuickTip text="沉浸式写代码 3 小时" onClick={setInputText} />
-        <QuickTip text="和莉莉喝了杯咖啡，很开心" onClick={setInputText} />
-        <QuickTip text="读了 20 分钟书" onClick={setInputText} />
+        <QuickTip text={t('logger.quick_tips.gym')} onClick={setInputText} />
+        <QuickTip text={t('logger.quick_tips.code')} onClick={setInputText} />
+        <QuickTip text={t('logger.quick_tips.date')} onClick={setInputText} />
+        <QuickTip text={t('logger.quick_tips.read')} onClick={setInputText} />
       </div>
 
       {/* 微信分享引导蒙层 */}
@@ -574,8 +576,8 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 5h7m0 0v7m0-7L8 14" />
              </svg>
              <div className="mt-2 text-right bg-white/10 backdrop-blur-sm px-4 py-2 rounded-xl border border-white/20">
-               <p className="text-lg font-bold">点击右上角菜单</p>
-               <p className="text-xs opacity-80 mt-1">选择 "发送给朋友"</p>
+               <p className="text-lg font-bold">{t('logger.share_overlay.click_menu')}</p>
+               <p className="text-xs opacity-80 mt-1">{t('logger.share_overlay.select_friend')}</p>
                <div className="flex gap-2 mt-2 justify-end">
                    <div className="w-8 h-8 rounded bg-emerald-500/20 border border-emerald-500/50 flex items-center justify-center">
                       <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
@@ -588,12 +590,12 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
             <div className="w-20 h-20 bg-indigo-600 rounded-2xl mx-auto mb-6 shadow-2xl flex items-center justify-center">
               <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
             </div>
-            <h3 className="text-2xl font-bold mb-4 tracking-tight">邀请好友一起记录</h3>
-            <p className="mb-12 text-white/60 leading-relaxed text-sm">
-              让 AI 帮助你们发现生活中的小确幸。<br/>分享给朋友，一起开启智能生活记录。
+            <h3 className="text-2xl font-bold mb-4 tracking-tight">{t('logger.share_overlay.title')}</h3>
+            <p className="mb-12 text-white/60 leading-relaxed text-sm whitespace-pre-line">
+              {t('logger.share_overlay.desc')}
             </p>
             <button className="px-8 py-3 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white font-medium hover:bg-white/20 transition-colors active:scale-95">
-              我知道了
+              {t('logger.share_overlay.button')}
             </button>
           </div>
         </div>
@@ -608,22 +610,22 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             </div>
-            <h3 className="text-xl font-bold text-slate-800 mb-2">已达到游客限制</h3>
+            <h3 className="text-xl font-bold text-slate-800 mb-2">{t('common.guest_limit_title')}</h3>
             <p className="text-slate-600 mb-6">
-              游客模式仅支持记录 3 条日常。为了持久保存您的记录并解锁 AI 汇总分析功能，请前往登录。
+              {t('common.guest_limit_desc')}
             </p>
             <div className="flex flex-col gap-3">
               <button
                 onClick={onLogout}
                 className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-colors"
               >
-                前往登录 / 注册
+                {t('common.login_register')}
               </button>
               <button
                 onClick={() => setShowLimitModal(false)}
                 className="w-full py-3 text-slate-400 font-medium hover:text-slate-600 transition-colors"
               >
-                再看看已记录的
+                {t('common.cancel_view')}
               </button>
             </div>
           </div>

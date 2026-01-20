@@ -1,5 +1,6 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { LogEntry } from '../types';
 import { createPortal } from 'react-dom';
 
@@ -9,34 +10,35 @@ interface HistoryProps {
   onUpdate: (updatedLog: LogEntry) => void;
 }
 
-const CATEGORY_MAP: Record<string, string> = {
-  'Work': '工作',
-  'Leisure': '休闲',
-  'Health': '健康',
-  'Social': '社交',
-  'Chores': '琐事',
-  'Other': '其他'
-};
-
-
-const getDateLabel = (timestamp: number) => {
-  const date = new Date(timestamp);
-  const now = new Date();
-  
-  // Reset time part for accurate date comparison
-  const d = new Date(date).setHours(0,0,0,0);
-  const t = new Date(now).setHours(0,0,0,0);
-  const y = new Date(now);
-  y.setDate(y.getDate() - 1);
-  const yesterday = y.setHours(0,0,0,0);
-
-  if (d === t) return '今天';
-  if (d === yesterday) return '昨天';
-  return date.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' });
-};
-
 const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
+  const { t } = useTranslation();
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
+
+  const CATEGORY_MAP: Record<string, string> = useMemo(() => ({
+    'Work': t('common.category.Work'),
+    'Leisure': t('common.category.Leisure'),
+    'Health': t('common.category.Health'),
+    'Social': t('common.category.Social'),
+    'Chores': t('common.category.Chores'),
+    'Other': t('common.category.Other')
+  }), [t]);
+
+  const getDateLabel = (timestamp: number) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    
+    // Reset time part for accurate date comparison
+    const d = new Date(date).setHours(0,0,0,0);
+    const tDate = new Date(now).setHours(0,0,0,0);
+    const y = new Date(now);
+    y.setDate(y.getDate() - 1);
+    const yesterday = y.setHours(0,0,0,0);
+
+    if (d === tDate) return t('history.date.today');
+    if (d === yesterday) return t('history.date.yesterday');
+    return date.toLocaleDateString(undefined, { month: 'long', day: 'numeric', weekday: 'long' });
+  };
+
   const [logToDelete, setLogToDelete] = useState<LogEntry | null>(null);
   const [swipedId, setSwipedId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -80,7 +82,7 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
   // 导出 CSV
   const exportToCSV = () => {
     const data = getExportData();
-    const headers = ['ID', '日期时间', '分类', '活动', '时长(分)', '原始输入', '心情', '重要度'];
+    const headers = ['ID', t('history.form.time'), t('history.form.category'), t('history.form.activity'), t('history.form.duration'), t('history.raw_text'), t('history.form.mood'), t('history.form.importance')];
     const csvRows = data.map(item => [
       item.id,
       item.datetime,
@@ -168,7 +170,7 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
               </svg>
             </div>
-            <span className="text-sm font-bold text-slate-700">筛选与导出</span>
+            <span className="text-sm font-bold text-slate-700">{t('history.filter_title')}</span>
             {(searchTerm || filterCategory !== 'All' || filterDate) && (
               <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse"></span>
             )}
@@ -189,7 +191,7 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
             <div className="relative">
               <input 
                 type="text" 
-                placeholder="搜索活动或关键词..." 
+                placeholder={t('history.search_placeholder')} 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full bg-slate-50 border-none rounded-2xl py-3 pl-11 pr-4 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
@@ -212,7 +214,7 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
                   onChange={(e) => setFilterCategory(e.target.value)}
                   className="w-full bg-slate-50 border-none rounded-xl py-2 pl-3 pr-8 text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 focus:ring-indigo-500/20"
                 >
-                  <option value="All">全部类别</option>
+                  <option value="All">{t('history.category_all')}</option>
                   {Object.entries(CATEGORY_MAP).map(([key, label]) => (
                     <option key={key} value={key}>{label}</option>
                   ))}
@@ -245,14 +247,14 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
                 className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-slate-50 text-slate-600 text-[11px] font-bold hover:bg-slate-100 transition-colors"
               >
                 <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                CSV 导出
+                {t('history.export_csv')}
               </button>
               <button 
                 onClick={exportToJSON}
                 className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-slate-50 text-slate-600 text-[11px] font-bold hover:bg-slate-100 transition-colors"
               >
                 <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                JSON 备份
+                {t('history.export_json')}
               </button>
             </div>
           </div>
@@ -261,9 +263,9 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
 
       <div className="flex items-center justify-between px-1">
         <h2 className="text-lg font-bold text-slate-800 tracking-tight">
-          {filteredLogs.length < logs.length ? '筛选结果' : '最近记录'}
+          {filteredLogs.length < logs.length ? t('history.list_result') : t('history.list_recent')}
         </h2>
-        <span className="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded-full">{filteredLogs.length} 条</span>
+        <span className="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded-full">{filteredLogs.length} {t('history.count_suffix') || '条'}</span>
       </div>
       
       <div className="space-y-1">
@@ -271,7 +273,7 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
           filteredLogs.map((log, index) => {
             const dateLabel = getDateLabel(log.timestamp);
             const prevLog = filteredLogs[index - 1];
-            // 如果是第一条，或者当前日期与上一条不同，则显示日期头
+            // If first or date diff, show header
             const showHeader = index === 0 || dateLabel !== getDateLabel(prevLog.timestamp);
 
             return (
@@ -290,6 +292,8 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
                     onSwipe={(id) => setSwipedId(id)}
                     onDelete={() => setLogToDelete(log)}
                     onDoubleClick={() => setSelectedLog(log)}
+                    t={t}
+                    categoryLabel={CATEGORY_MAP[log.category] || log.category}
                   />
                 </div>
               </React.Fragment>
@@ -297,7 +301,7 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
           })
         ) : (
           <div className="text-center py-12 bg-white rounded-3xl border border-dashed border-slate-200">
-            <p className="text-slate-400 text-sm">没有找到匹配的记录</p>
+            <p className="text-slate-400 text-sm">{t('history.no_matches')}</p>
             <button 
               onClick={() => {
                 setSearchTerm('');
@@ -306,14 +310,14 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
               }}
               className="mt-3 text-indigo-600 text-xs font-bold hover:underline"
             >
-              清除所有筛选
+              {t('history.clear_filters')}
             </button>
           </div>
         )}
       </div>
 
       {logs.length > 0 && (
-        <p className="text-center text-xs text-slate-400 mt-6 font-medium">双击卡片查看详情，向左滑动删除</p>
+        <p className="text-center text-xs text-slate-400 mt-6 font-medium">{t('history.hint')}</p>
       )}
 
       {/* Detail Modal */}
@@ -323,34 +327,34 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
             setSelectedLog(null);
             setIsEditing(false);
           }} 
-          title={isEditing ? "编辑记录" : "记录详情"}
+          title={isEditing ? t('history.modal_edit') : t('history.modal_detail')}
         >
           <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2 scrollbar-hide">
             {isEditing ? (
               // EDIT MODE
               <div className="space-y-4">
                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">原始输入 (仅查看)</label>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase mb-1 block">{t('history.raw_text')} (View Only)</label>
                   <p className="text-slate-500 text-xs italic">"{editForm?.rawText}"</p>
                 </div>
 
                 <div className="space-y-3">
                    <EditInput 
-                    label="活动内容" 
+                    label={t('history.form.activity')}
                     value={editForm?.activity || ''} 
                     onChange={v => setEditForm(prev => prev ? {...prev, activity: v} : null)} 
                    />
                    
                    <div className="grid grid-cols-2 gap-3">
                       <EditSelect 
-                        label="分类" 
+                        label={t('history.form.category')}
                         value={editForm?.category || 'Other'} 
                         options={Object.keys(CATEGORY_MAP)}
                         labels={CATEGORY_MAP}
                         onChange={v => setEditForm(prev => prev ? {...prev, category: v as any} : null)}
                       />
                       <EditInput 
-                        label="时长 (分钟)" 
+                        label={t('history.form.duration')}
                         type="number"
                         value={editForm?.durationMinutes?.toString() || '0'} 
                         onChange={v => setEditForm(prev => prev ? {...prev, durationMinutes: parseInt(v) || 0} : null)} 
@@ -359,12 +363,12 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
 
                    <div className="grid grid-cols-2 gap-3">
                       <EditInput 
-                        label="心情状态" 
+                        label={t('history.form.mood')}
                         value={editForm?.mood || ''} 
                         onChange={v => setEditForm(prev => prev ? {...prev, mood: v} : null)} 
                       />
                       <EditSelect 
-                        label="重要度" 
+                        label={t('history.form.importance')}
                         value={editForm?.importance?.toString() || '3'} 
                         options={['1', '2', '3', '4', '5']}
                         onChange={v => setEditForm(prev => prev ? {...prev, importance: parseInt(v) as any} : null)}
@@ -376,24 +380,24 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
                    <button 
                     onClick={() => setIsEditing(false)}
                     className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium"
-                   >取消</button>
+                   >{t('history.btn.cancel')}</button>
                    <button 
                     onClick={handleSaveEdit}
                     className="flex-1 px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-bold shadow-lg shadow-indigo-100"
-                   >保存修改</button>
+                   >{t('history.btn.save')}</button>
                 </div>
               </div>
             ) : (
               // VIEW MODE
               <>
                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                  <p className="text-sm text-slate-400 mb-1">原始输入</p>
+                  <p className="text-sm text-slate-400 mb-1">{t('history.raw_text')}</p>
                   <p className="text-slate-800 font-medium italic">"{selectedLog.rawText}"</p>
                 </div>
 
                 {selectedLog.images && selectedLog.images.length > 0 && (
                   <div className="mt-4">
-                    <p className="text-sm text-slate-400 mb-2">附件照片</p>
+                    <p className="text-sm text-slate-400 mb-2">{t('history.attachment')}</p>
                     <div className="flex gap-2 overflow-x-auto pb-2 snap-x">
                       {selectedLog.images.map((url, idx) => (
                         <div key={idx} className="flex-shrink-0 w-32 h-32 rounded-xl overflow-hidden border border-slate-100 snap-start">
@@ -405,17 +409,17 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
                 )}
                 
                 <div className="grid grid-cols-2 gap-4 mt-2">
-                  <DetailItem label="活动" value={selectedLog.activity} />
-                  <DetailItem label="分类" value={CATEGORY_MAP[selectedLog.category] || selectedLog.category} />
-                  <DetailItem label="时长" value={`${selectedLog.durationMinutes} 分钟`} />
-                  <DetailItem label="心情" value={selectedLog.mood} />
+                  <DetailItem label={t('history.form.activity')} value={selectedLog.activity} />
+                  <DetailItem label={t('history.form.category')} value={CATEGORY_MAP[selectedLog.category] || selectedLog.category} />
+                  <DetailItem label={t('history.form.duration')} value={`${selectedLog.durationMinutes} min`} />
+                  <DetailItem label={t('history.form.mood')} value={selectedLog.mood} />
                   <DetailItem 
-                    label="地理位置" 
+                    label={t('history.form.location')} 
                     value={selectedLog.location?.name || '未知'} 
                     className={selectedLog.location ? 'text-emerald-600 font-medium' : ''}
                   />
-                  <DetailItem label="重要程度" value={'★'.repeat(selectedLog.importance) + '☆'.repeat(5 - selectedLog.importance)} className="text-amber-400" />
-                  <DetailItem label="记录时间" value={new Date(selectedLog.timestamp).toLocaleString('zh-CN')} />
+                  <DetailItem label={t('history.form.importance')} value={'★'.repeat(selectedLog.importance) + '☆'.repeat(5 - selectedLog.importance)} className="text-amber-400" />
+                  <DetailItem label={t('history.form.time')} value={new Date(selectedLog.timestamp).toLocaleString(undefined)} />
                 </div>
 
                 <button 
@@ -423,7 +427,7 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
                   className="w-full mt-4 bg-slate-900 text-white py-3 rounded-2xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-slate-200"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                  修改此条记录
+                  {t('history.btn.edit')}
                 </button>
               </>
             )}
@@ -433,20 +437,20 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
 
       {/* Delete Confirm Modal */}
       {logToDelete && (
-        <Modal onClose={() => setLogToDelete(null)} title="确认删除">
-          <p className="text-slate-600 mb-6">确定要删除这条"{logToDelete.activity}"记录吗？此操作无法撤销。</p>
+        <Modal onClose={() => setLogToDelete(null)} title={t('history.delete_title')}>
+          <p className="text-slate-600 mb-6">{t('history.delete_content', { activity: logToDelete.activity })}</p>
           <div className="flex gap-3">
             <button 
               onClick={() => setLogToDelete(null)}
               className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition-colors"
             >
-              取消
+              {t('history.btn.cancel')}
             </button>
             <button 
               onClick={handleDeleteConfirm}
               className="flex-1 px-4 py-2.5 rounded-xl bg-red-500 text-white font-bold shadow-lg shadow-red-200 hover:bg-red-600 active:scale-95 transition-all"
             >
-              删除
+              {t('history.btn.delete')}
             </button>
           </div>
         </Modal>
@@ -461,7 +465,9 @@ const HistoryItem: React.FC<{
   onSwipe: (id: string | null) => void;
   onDelete: () => void;
   onDoubleClick: () => void;
-}> = ({ log, isSwiped, onSwipe, onDelete, onDoubleClick }) => {
+  t: any;
+  categoryLabel: string;
+}> = ({ log, isSwiped, onSwipe, onDelete, onDoubleClick, t, categoryLabel }) => {
   const [offsetX, setOffsetX] = useState(0);
   const touchStart = useRef<number | null>(null);
   const itemRef = useRef<HTMLDivElement>(null);
@@ -515,7 +521,7 @@ const HistoryItem: React.FC<{
           className="w-full h-full flex flex-col items-center justify-center text-white"
         >
           <svg className="w-6 h-6 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-          <span className="text-[10px] font-bold">删除</span>
+          <span className="text-[10px] font-bold">{t('history.btn.delete')}</span>
         </button>
       </div>
 
@@ -534,7 +540,7 @@ const HistoryItem: React.FC<{
           <div className="flex-1 min-w-0 mr-4">
             <div className="flex items-center gap-2 mb-1.5 overflow-hidden">
                <span className={`flex-none text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${getCategoryColor(log.category)}`}>
-              {CATEGORY_MAP[log.category] || log.category}
+              {categoryLabel}
               </span>
                <span className={`flex-none text-[10px] font-medium px-1.5 py-0.5 rounded-md ${log.mood === '积极' || log.mood === '开心' ? 'bg-orange-50 text-orange-500' : 'bg-slate-50 text-slate-400'}`}>
                  {log.mood}

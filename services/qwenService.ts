@@ -25,7 +25,7 @@ export const parseLifeLog = async (text: string): Promise<ParseResult> => {
   return response.json();
 };
 
-export const getDailyInsight = async (logs: LogEntry[], period: 'day' | 'week' | 'month' = 'day'): Promise<string> => {
+export const getDailyInsight = async (logs: LogEntry[], period: 'day' | 'week' | 'month' = 'day', lang: string = 'zh'): Promise<string> => {
   if (logs.length === 0) return JSON.stringify({ summary: "暂无数据", bulletPoints: [] });
   
   const response = await fetch(`${API_BASE_URL}/insight`, {
@@ -34,7 +34,7 @@ export const getDailyInsight = async (logs: LogEntry[], period: 'day' | 'week' |
       ...getAuthHeader(),
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ logs, period })
+    body: JSON.stringify({ logs, period, lang })
   });
 
   if (!response.ok) {

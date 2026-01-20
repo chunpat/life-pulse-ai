@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ViewMode } from '../types';
 import OnboardingGuide from './OnboardingGuide';
 
@@ -25,6 +26,9 @@ export const Layout: React.FC<LayoutProps> = ({
   onCloseGuide = () => {}
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { t, i18n } = useTranslation();
+
+  const displayUserName = userName === '游客' ? t('common.guest_user') : userName;
 
   return (
     // Outer Container - Desktop centered, Mobile full
@@ -41,10 +45,10 @@ export const Layout: React.FC<LayoutProps> = ({
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-xl font-black text-slate-800 tracking-tighter">
-                LifePulse <span className="text-indigo-500">AI</span>
+                {t('app.title')} <span className="text-indigo-500">AI</span>
               </h1>
               <p className="text-[10px] text-slate-400 font-bold tracking-wide mt-0.5">
-                你好, {userName}
+                {t('common.hello')}, {displayUserName}
               </p>
             </div>
             
@@ -56,7 +60,7 @@ export const Layout: React.FC<LayoutProps> = ({
                   setIsMenuOpen(false);
                 }}
                 className={`p-2 rounded-full transition-colors ${currentView === ViewMode.FINANCE ? 'bg-indigo-100 text-indigo-600' : 'hover:bg-slate-100 text-slate-400'}`}
-                title="财务账本"
+                title={t('nav.finance')}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
               </button>
@@ -65,7 +69,7 @@ export const Layout: React.FC<LayoutProps> = ({
                 <button 
                   onClick={() => setIsMenuOpen(!isMenuOpen)}
                   className={`p-2 rounded-full transition-colors ${isMenuOpen ? 'bg-indigo-50 text-indigo-600' : 'hover:bg-slate-100 text-slate-400'}`}
-                  title="用户菜单"
+                  title={t('nav.profile_menu')}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                 </button>
@@ -74,16 +78,33 @@ export const Layout: React.FC<LayoutProps> = ({
                 {isMenuOpen && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setIsMenuOpen(false)}></div>
-                    <div className="absolute right-0 top-12 w-32 bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-50 transform origin-top-right animate-in fade-in zoom-in-95 duration-200">
+                    <div className="absolute right-0 top-12 w-40 bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-50 transform origin-top-right animate-in fade-in zoom-in-95 duration-200">
                       <div className="px-4 py-2 border-b border-slate-50 text-xs text-slate-400 font-bold">
-                        {userName}
+                        {displayUserName}
                       </div>
+
+                      {/* Language Switcher */}
+                      <div className="px-4 py-2 border-b border-slate-50 flex gap-2 justify-center">
+                        <button 
+                          onClick={() => i18n.changeLanguage('zh')}
+                          className={`flex-1 text-xs py-1 rounded ${i18n.language.startsWith('zh') ? 'bg-indigo-100 text-indigo-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}
+                        >
+                          中文
+                        </button>
+                        <button 
+                          onClick={() => i18n.changeLanguage('en')}
+                          className={`flex-1 text-xs py-1 rounded ${i18n.language.startsWith('en') ? 'bg-indigo-100 text-indigo-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}
+                        >
+                          EN
+                        </button>
+                      </div>
+
                       <button 
                         onClick={onLogout}
                         className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 font-bold transition-colors flex items-center gap-2"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-                        退出
+                        {t('nav.logout')}
                       </button>
                     </div>
                   </>
@@ -108,7 +129,7 @@ export const Layout: React.FC<LayoutProps> = ({
             id="nav-history"
             active={currentView === ViewMode.TIMELINE}
             onClick={() => onViewChange(ViewMode.TIMELINE)}
-            label="回顾"
+            label={t('nav.timeline')}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
           </NavButton>
@@ -118,6 +139,7 @@ export const Layout: React.FC<LayoutProps> = ({
             <button
               id="nav-logger"
               onClick={() => onViewChange(ViewMode.LOGGER)}
+              title={t('nav.logger')}
               className={`
                 w-14 h-14 rounded-full flex items-center justify-center 
                 shadow-xl shadow-indigo-500/30 border-4 border-slate-50 
@@ -146,7 +168,7 @@ export const Layout: React.FC<LayoutProps> = ({
             id="nav-analytics"
             active={currentView === ViewMode.ANALYTICS}
             onClick={() => onViewChange(ViewMode.ANALYTICS)}
-            label="分析"
+            label={t('nav.analytics')}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
           </NavButton>

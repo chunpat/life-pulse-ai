@@ -1,5 +1,6 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
 import { LogEntry } from '../types';
 import { getDailyInsight } from '../services/qwenService';
@@ -13,14 +14,6 @@ interface AnalyticsProps {
 }
 
 const COLORS = ['#4F46E5', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#64748B'];
-const CATEGORY_MAP: Record<string, string> = {
-  'Work': '工作',
-  'Leisure': '休闲',
-  'Health': '健康',
-  'Social': '社交',
-  'Chores': '琐事',
-  'Other': '其他'
-};
 
 const Analytics: React.FC<AnalyticsProps> = ({ 
   logs, 
@@ -29,7 +22,17 @@ const Analytics: React.FC<AnalyticsProps> = ({
   isGenerating: isDefaultGenerating,
   onLoginClick
 }) => {
+  const { t, i18n } = useTranslation();
   const [period, setPeriod] = useState<'day' | 'week' | 'month'>('day');
+
+  const CATEGORY_MAP: Record<string, string> = useMemo(() => ({
+    'Work': t('common.category.Work'),
+    'Leisure': t('common.category.Leisure'),
+    'Health': t('common.category.Health'),
+    'Social': t('common.category.Social'),
+    'Chores': t('common.category.Chores'),
+    'Other': t('common.category.Other')
+  }), [t]);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [customInsight, setCustomInsight] = useState<string | null>(null);
   const [isAnalysing, setIsAnalysing] = useState(false);
@@ -68,11 +71,11 @@ const Analytics: React.FC<AnalyticsProps> = ({
     setIsAnalysing(true);
     try {
       const { getDailyInsight } = await import('../services/qwenService');
-      const res = await getDailyInsight(filteredLogs, period);
+      const res = await getDailyInsight(filteredLogs, period, i18n.language);
       setCustomInsight(res);
     } catch (e) {
       console.error(e);
-      setCustomInsight("报告生成失败，请稍后再试");
+      setCustomInsight(t('analytics.ai_card.failed'));
     } finally {
       setIsAnalysing(false);
     }
@@ -87,16 +90,16 @@ const Analytics: React.FC<AnalyticsProps> = ({
   const isGenerating = isAnalysing || (period === 'day' && selectedDate === new Date().toISOString().split('T')[0] && isDefaultGenerating);
 
   const displayInsight = useMemo(() => {
-    if (isGuest) return "游客模式暂不支持 AI 深度总结。登录后可享受全天候自动洞察、趋势分析及数据备份功能！";
+    if (isGuest) return t('analytics.ai_card.guest_msg');
     
-    if (isGenerating) return "正在分析你的生活数据...";
+    if (isGenerating) return t('analytics.ai_card.generating');
     
     if (currentInsight) return currentInsight;
 
-    if (filteredLogs.length === 0) return "该时段没有记录内容，无法进行分析。";
+    if (filteredLogs.length === 0) return t('analytics.ai_card.no_data');
     
-    return "点击下方按钮，生成深度分析报告";
-  }, [isGuest, filteredLogs.length, isGenerating, currentInsight]);
+    return t('analytics.ai_card.generate_hint');
+  }, [isGuest, filteredLogs.length, isGenerating, currentInsight, t]);
 
   const parsedContent = useMemo(() => {
     try {
@@ -140,7 +143,7 @@ const Analytics: React.FC<AnalyticsProps> = ({
                  period === p ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'
                }`}
              >
-               {{day: '日', week: '周', month: '月'}[p]}试图
+               {t(`analytics.filter.${p}`)}
              </button>
           ))}
         </div>
@@ -148,11 +151,9 @@ const Analytics: React.FC<AnalyticsProps> = ({
         {/* Date Selector */}
         <div className="flex items-center justify-between px-2 pb-1">
           <span className="text-xs font-bold text-slate-500">
-             {period === 'day' && '选择日期'}
-             {period === 'week' && '选择周 (选该周任意一天)'}
-             {period === 'month' && '选择月份 (选该月任意一天)'}
+             {t(`analytics.date_selector.${period}`)}
           </span>
-          <input 
+          <input  
             type="date" 
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
@@ -170,7 +171,7 @@ const Analytics: React.FC<AnalyticsProps> = ({
                   <svg className="w-5 h-5 text-indigo-100" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71L12 2z"/></svg>
               </div>
               <span className="text-xs font-bold uppercase tracking-widest text-indigo-200">
-                AI {period === 'day' ? '每日' : period === 'week' ? '周度' : '月度'}洞察
+                {t(`analytics.ai_card.title.${period}`)}
               </span>
             </div>
             
@@ -180,7 +181,7 @@ const Analytics: React.FC<AnalyticsProps> = ({
                   className="px-3 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-bold border border-white/30 transition-all flex items-center gap-1"
                 >
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                  生成报告
+                  {t('analytics.ai_card.generate')}
                 </button>
             )}
           </div>
@@ -210,7 +211,7 @@ const Analytics: React.FC<AnalyticsProps> = ({
               onClick={onLoginClick}
               className="mt-6 w-full py-3 bg-white text-indigo-600 hover:bg-indigo-50 rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-900/20"
             >
-              解锁完整 AI 分析
+              {t('analytics.ai_card.unlock')}
             </button>
           )}
         </div>
@@ -221,13 +222,13 @@ const Analytics: React.FC<AnalyticsProps> = ({
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <StatCard label="统计时长" value={`${Math.floor(totalTime / 60)}时 ${totalTime % 60}分`} sub={period === 'day' ? '今日统计' : period === 'week' ? '本周统计' : '本月统计'} />
-        <StatCard label="活动项目" value={filteredLogs.length.toString()} sub="总记录数" />
+        <StatCard label={t('analytics.stat.duration')} value={`${Math.floor(totalTime / 60)}h ${totalTime % 60}m`} sub={t(`analytics.stat.${period}_stat`)} />
+        <StatCard label={t('analytics.stat.count')} value={filteredLogs.length.toString()} sub={t('analytics.stat.total_records')} />
       </div>
 
       {/* Chart */}
       <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm">
-        <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-6">时间分配</h3>
+        <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-6">{t('analytics.chart.time_alloc')}</h3>
         {categoryData.length > 0 ? (
           <div className="flex flex-col">
             <div className="h-56 w-full">
@@ -246,7 +247,7 @@ const Analytics: React.FC<AnalyticsProps> = ({
                   </Pie>
                   <Tooltip 
                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                    formatter={(value: number) => [`${value} 分钟`, '耗时']}
+                    formatter={(value: number) => [`${value} min`, t('history.form.duration')]}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -256,28 +257,28 @@ const Analytics: React.FC<AnalyticsProps> = ({
               {categoryData.map((entry, index) => (
                 <div key={entry.name} className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
-                  <span className="text-xs font-medium text-slate-600">{entry.name}: {entry.value}分</span>
+                  <span className="text-xs font-medium text-slate-600">{entry.name}: {entry.value}m</span>
                 </div>
               ))}
             </div>
           </div>
         ) : (
           <div className="flex items-center justify-center h-48 text-slate-400 text-xs italic">
-            暂无足够数据进行可视化分析
+            {t('analytics.chart.no_data')}
           </div>
         )}
       </div>
 
       <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm">
-        <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-4">精力与状态</h3>
-        <p className="text-xs text-slate-500 mb-4">记录活动的重要程度分布。</p>
+        <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-4">{t('analytics.chart.energy')}</h3>
+        <p className="text-xs text-slate-500 mb-4">{t('analytics.chart.energy_desc')}</p>
         <div className="h-40">
            <ResponsiveContainer width="100%" height="100%">
               <BarChart data={logs.slice().reverse()}>
                 <XAxis dataKey="id" hide />
                 <Tooltip 
-                   labelFormatter={() => '活动详情'}
-                   formatter={(value: any, name: any, props: any) => [`重要度: ${value}`, props.payload.mood]}
+                   labelFormatter={() => t('history.modal_detail')}
+                   formatter={(value: any, name: any, props: any) => [`${t('history.form.importance')}: ${value}`, props.payload.mood]}
                 />
                 <Bar dataKey="importance" fill="#4F46E5" radius={[4, 4, 0, 0]} />
               </BarChart>

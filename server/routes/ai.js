@@ -75,7 +75,7 @@ router.post('/parse', async (req, res) => {
 router.post('/insight', authenticateToken, async (req, res) => {
   try {
     // period: 'day' | 'week' | 'month' (default: 'day')
-    const { logs, period = 'day' } = req.body;
+    const { logs, period = 'day', lang = 'zh' } = req.body;
     if (!logs || !Array.isArray(logs)) return res.status(400).json({ message: '数据格式错误' });
 
     if (!apiKey) {
@@ -84,19 +84,33 @@ router.post('/insight', authenticateToken, async (req, res) => {
 
     const logSummary = logs.map(l => `${l.activity} (耗时 ${l.durationMinutes}分钟, 类别 ${l.category})`).join(', ');
 
-    const periodTextMap = {
+    const isEn = lang && lang.startsWith('en');
+    const periodTextMap = isEn ? {
+      'day': 'day',
+      'week': 'week',
+      'month': 'month'
+    } : {
       'day': '一天',
       'week': '一周',
       'month': '一月'
     };
-    const periodText = periodTextMap[period] || '一段时间';
+    const periodText = periodTextMap[period] || (isEn ? 'period' : '一段时间');
   
-    const response = await client.chat.completions.create({
-      model: modelName,
-      messages: [
-        {
-          role: "system",
-          content: `你是一个敏锐的生活数据分析师。请回顾用户${periodText}的活动日志，并返回 JSON 格式的分析报告。
+    const systemPrompt = isEn 
+    ? `You are a keen life data analyst. Review the user's activity logs for the ${periodText} and return a JSON analysis report.
+Please do NOT use Markdown formatting, return the JSON object directly.
+
+JSON Structure Requirements:
+{
+  "summary": "A short summary (max 40 words, qualitative like 'Productive ${periodText}')",
+  "bulletPoints": [
+    { "icon": "👍", "text": "Highlights (e.g., Maintained exercise habit)" },
+    { "icon": "📊", "text": "Time allocation (e.g., Work ratio is high)" },
+    { "icon": "💡", "text": "Suggestions (e.g., Take short breaks)" }
+  ]
+}
+Ensure bulletPoints array has at least 3 items.`
+    : `你是一个敏锐的生活数据分析师。请回顾用户${periodText}的活动日志，并返回 JSON 格式的分析报告。
 请不要使用 Markdown 格式，直接返回 JSON 对象。
 
 JSON 结构要求：
@@ -108,11 +122,18 @@ JSON 结构要求：
     { "icon": "💡", "text": "具体的改进建议 (例如：建议增加每小时的短暂休息)" }
   ]
 }
-确保 bulletPoints 数组至少包含 3 条内容。`
+确保 bulletPoints 数组至少包含 3 条内容。`;
+
+    const response = await client.chat.completions.create({
+      model: modelName,
+      messages: [
+        {
+          role: "system",
+          content: systemPrompt
         },
         {
           role: "user",
-          content: `我的${periodText}活动：${logSummary}`
+          content: isEn ? `My activities for this ${periodText}: ${logSummary}` : `我的${periodText}活动：${logSummary}`
         }
       ],
       response_format: { type: "json_object" }
