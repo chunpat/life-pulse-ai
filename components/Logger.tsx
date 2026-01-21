@@ -352,7 +352,7 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
     if (!inputText.trim() || isProcessing) return;
 
     // 游客模式限制：限记 3 条
-    if (isGuest && logsCount >= 3) {
+    if (isGuest && logs.length >= 3) {
       setShowLimitModal(true);
       return;
     }
