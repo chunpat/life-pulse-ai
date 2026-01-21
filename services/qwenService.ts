@@ -7,19 +7,26 @@ const getAuthHeader = () => {
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 };
 
-export const parseLifeLog = async (text: string): Promise<ParseResult> => {
+export const parseLifeLog = async (text: string, lang?: string): Promise<ParseResult> => {
   const response = await fetch(`${API_BASE_URL}/parse`, {
     method: 'POST',
     headers: {
       ...getAuthHeader(),
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ text })
+    body: JSON.stringify({ text, lang })
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'AI 解析失败');
+    let errorMessage = 'AI 解析失败';
+    try {
+      const errorData = await response.json();
+      errorMessage = errorData.message || errorMessage;
+    } catch (e) {
+      // 如果响应不是 JSON（例如 500 Proxy Error），则使用状态文本
+      errorMessage = `Server Error: ${response.status} ${response.statusText}`;
+    }
+    throw new Error(errorMessage);
   }
 
   return response.json();

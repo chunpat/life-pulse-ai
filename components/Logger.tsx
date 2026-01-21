@@ -359,7 +359,7 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
 
     setIsProcessing(true);
     try {
-      const parsed = await parseLifeLog(inputText);
+      const parsed = await parseLifeLog(inputText, i18n.language);
 
       // 自动保存财务记录
       if (parsed.finance && parsed.finance.length > 0) {

@@ -14,23 +14,23 @@ const client = new OpenAI({
 // 解析生活日志 - 允许游客访问，前端负责次数限制
 router.post('/parse', async (req, res) => {
   try {
-    const { text } = req.body;
+    const { text, lang } = req.body;
     if (!text) return res.status(400).json({ message: '请提供文本内容' });
 
     if (!apiKey) {
       return res.status(500).json({ message: '服务器未配置 AI API Key' });
     }
 
-    const response = await client.chat.completions.create({
-      model: modelName,
-      messages: [
-        {
-          role: "system",
-          content: `你是一位专业的生活记录及财务助手。你的任务是从用户的随手记笔记中提取活动元数据以及财务消费情况。
+    // Determine language based on parameter or header
+    // Default to 'zh' if 'zh' is present in lang or header, otherwise 'en' if 'en' is present, else 'zh'
+    const reqLang = lang || req.headers['accept-language'] || 'zh';
+    const isEn = reqLang.toLowerCase().includes('en') && !reqLang.toLowerCase().includes('zh');
+
+    const systemPromptZh = `你是一位专业的生活记录及财务助手。你的任务是从用户的随手记笔记中提取活动元数据以及财务消费情况。
 请返回纯 JSON 格式，不要包含 Markdown 格式（如 \`\`\`json）。
 
 1. **生活记录** (作为根对象的属性):
-   - activity: 活动内容摘要
+   - activity: 活动内容摘要(请使用中文)
    - category: 必须是以下之一：Work, Leisure, Health, Chores, Social, Other。
    - durationMinutes: 估算时长(分钟)
    - mood: 心情(如：开心、疲惫、高效)
@@ -53,7 +53,43 @@ router.post('/parse', async (req, res) => {
     { "type": "EXPENSE", "amount": 50, "category": "餐饮", "description": "午饭" },
     { "type": "EXPENSE", "amount": 100, "category": "购物", "description": "买书" }
   ]
-}`
+}`;
+
+    const systemPromptEn = `You are a professional life logger and finance assistant. Your task is to extract activity metadata and financial transactions from user notes.
+Please return purely in JSON format, without Markdown formatting (like \`\`\`json).
+
+1. **Life Log** (as root properties):
+   - activity: Activity summary (Please use English)
+   - category: Must be one of: Work, Leisure, Health, Chores, Social, Other.
+   - durationMinutes: Estimated duration (minutes)
+   - mood: Mood (e.g., Happy, Tired, Productive)
+   - importance: 1-5
+
+2. **Finance Records** (put in 'finance' array, empty array if none):
+   - type: "EXPENSE" or "INCOME"
+   - amount: Amount (number)
+   - category: Category (e.g., Food, Transport, Shopping, Salary, Investment, etc.)
+   - description: Description
+
+Return format example:
+{
+  "activity": "Lunch and bought books",
+  "category": "Leisure",
+  "durationMinutes": 60,
+  "mood": "Happy",
+  "importance": 3,
+  "finance": [
+    { "type": "EXPENSE", "amount": 50, "category": "Food", "description": "Lunch" },
+    { "type": "EXPENSE", "amount": 100, "category": "Shopping", "description": "Books" }
+  ]
+}`;
+
+    const response = await client.chat.completions.create({
+      model: modelName,
+      messages: [
+        {
+          role: "system",
+          content: isEn ? systemPromptEn : systemPromptZh
         },
         {
           role: "user",
