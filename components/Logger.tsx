@@ -28,7 +28,7 @@ interface LoggerProps {
 }
 
 const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = false, logs }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [inputText, setInputText] = useState('');
   const [suggestion, setSuggestion] = useState<{content: string, type: string, trigger: string} | null>(null);
   const [isListening, setIsListening] = useState(false);
@@ -51,8 +51,11 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
 
     // Check localStorage to avoid spamming the API (limit to once per 4 hours)
     const lastFetch = localStorage.getItem('last_suggestion_fetch');
+    const lastLang = localStorage.getItem('last_suggestion_lang');
     const now = Date.now();
-    if (lastFetch && now - parseInt(lastFetch) < 4 * 60 * 60 * 1000) {
+
+    // Cache hit only if time is valid AND language matches
+    if (lastFetch && (now - parseInt(lastFetch) < 4 * 60 * 60 * 1000) && lastLang === i18n.language) {
       const savedSuggestion = localStorage.getItem('current_suggestion');
       if (savedSuggestion) {
         setSuggestion(JSON.parse(savedSuggestion));
@@ -62,15 +65,17 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
 
     const fetchSuggestion = async () => {
       try {
-        const res = await getSmartSuggestions(logs);
+        const res = await getSmartSuggestions(logs, i18n.language);
         if (res.suggestions && res.suggestions.length > 0) {
           const mainSuggestion = res.suggestions[0];
           setSuggestion(mainSuggestion);
           // Cache it
           localStorage.setItem('last_suggestion_fetch', now.toString());
+          localStorage.setItem('last_suggestion_lang', i18n.language);
           localStorage.setItem('current_suggestion', JSON.stringify(mainSuggestion));
         }
       } catch (e) {
+
         console.error("Failed to fetch suggestions", e);
       }
     };
@@ -78,7 +83,7 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
     // Delay slightly to not block initial render
     const timer = setTimeout(fetchSuggestion, 2000);
     return () => clearTimeout(timer);
-  }, [logs.length, isGuest]);
+  }, [logs.length, isGuest, i18n.language]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;

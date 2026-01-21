@@ -106,10 +106,6 @@ router.get('/reverse-geocode', async (req, res) => {
         const tiandituUrl = `https://api.tianditu.gov.cn/geocoder?postStr=${encodeURIComponent(postStr)}&type=geocode&tk=${tk}`;
         
         const response = await fetch(tiandituUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Referer': 'https://api.tianditu.gov.cn/'
-          },
           signal: controller.signal
         });
         clearTimeout(timeoutId);

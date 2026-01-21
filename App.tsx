@@ -68,7 +68,7 @@ const App: React.FC = () => {
   const handleGuestMode = () => {
     const guestUser: User = {
       id: 'guest_local',
-      name: '游客模式',
+      name: '游客', // Simplified to '游客' to match translation key logic in Layout.tsx
       status: 'guest'
     };
     setUser(guestUser);

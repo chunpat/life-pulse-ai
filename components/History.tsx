@@ -129,8 +129,8 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
         <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
           <svg className="w-10 h-10 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
         </div>
-        <p className="text-slate-500 font-medium text-lg">暂无记录</p>
-        <p className="text-slate-400 text-sm mt-2">点击底部的 + 号开始第一笔记录</p>
+        <p className="text-slate-500 font-medium text-lg">{t('history.no_logs')}</p>
+        <p className="text-slate-400 text-sm mt-2">{t('history.hint_empty_state', 'Click + to start your first log')}</p>
       </div>
     );
   }

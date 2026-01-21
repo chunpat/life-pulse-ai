@@ -149,22 +149,27 @@ JSON 结构要求：
 // 获取智能生活建议 (基于历史习惯)
 router.post('/suggestions', authenticateToken, async (req, res) => {
   try {
-    const { logs, currentHour, currentWeekday } = req.body;
+    const { logs, currentHour, currentWeekday, lang = 'zh' } = req.body;
     
     if (!logs || !Array.isArray(logs)) return res.status(400).json({ message: '数据格式错误' });
     if (!apiKey) return res.status(500).json({ message: 'AI API Key 未配置' });
 
-    // 只取最近 50 条记录避免 Token 溢出，重点看时间戳最近的
-    const recentLogs = logs.slice(0, 50).map(l => 
-      `[${new Date(l.timestamp).toLocaleDateString()} ${l.category}] ${l.activity} (${l.durationMinutes}m)`
-    ).join('\n');
+    const isEn = lang.startsWith('en');
+    const daysZh = ['日', '一', '二', '三', '四', '五', '六'];
+    const daysEn = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    
+    // Handle legacy calls where currentWeekday might be a string (though we just changed frontend)
+    // or just use the index if it's a number.
+    let dayLabel = '';
+    if (typeof currentWeekday === 'number') {
+       dayLabel = isEn ? daysEn[currentWeekday] : `星期${daysZh[currentWeekday]}`;
+    } else {
+       dayLabel = String(currentWeekday); // Fallback
+    }
 
-    const response = await client.chat.completions.create({
-      model: modelName,
-      messages: [
-        {
-          role: "system",
-          content: `你是一个贴心的生活管家。请根据用户最近的活动日志，结合当前时间（星期${currentWeekday}，${currentHour}点），提供 1-2 条暖心的生活平衡建议。
+    const timeStr = isEn ? `${currentHour}:00` : `${currentHour}点`;
+
+    const systemPromptZh = `你是一个贴心的生活管家。请根据用户最近的活动日志，结合当前时间（${dayLabel}，${timeStr}），提供 1-2 条暖心的生活平衡建议。
           
 关注点：
 1. 是否过度劳累（连续长时间工作）？
@@ -182,15 +187,51 @@ router.post('/suggestions', authenticateToken, async (req, res) => {
       "trigger": "触发原因 (例如：检测到连续3天熬夜)"
     }
   ]
-}`
+}`;
+
+    const systemPromptEn = `You are a thoughtful life assistant. Based on the user's recent activity logs and the current time (${dayLabel}, ${timeStr}), provide 1-2 warm life balance suggestions.
+
+Focus on:
+1. Overwork (long consecutive work hours)?
+2. Lack of exercise or leisure?
+3. Irregular sleep schedule?
+4. If it's late night, suggest rest; if weekend, suggest relaxation.
+
+Return in JSON format:
+{
+  "suggestions": [
+    { 
+      "id": "gen-id",
+      "type": "health" | "work_life_balance" | "productivity" | "other",
+      "content": "Suggestion content, tone should be natural and warm like a friend (within 20 words)",
+      "trigger": "Trigger reason (e.g., detected 3 consecutive late nights)"
+    }
+  ]
+}`;
+
+    // 只取最近 50 条记录避免 Token 溢出，重点看时间戳最近的
+    const recentLogs = logs.slice(0, 50).map(l => 
+      `[${new Date(l.timestamp).toLocaleDateString()} ${l.category}] ${l.activity} (${l.durationMinutes}m)`
+    ).join('\n');
+
+    const userPromptZh = `最近活动记录：\n${recentLogs}\n\n当前状态：今天是${dayLabel}，现在是${timeStr}。请给出建议。`;
+    const userPromptEn = `Recent logs:\n${recentLogs}\n\nCurrent status: Today is ${dayLabel}, time is ${timeStr}. Please provide suggestions.`;
+
+    const response = await client.chat.completions.create({
+      model: modelName,
+      messages: [
+        {
+          role: "system",
+          content: isEn ? systemPromptEn : systemPromptZh
         },
         {
           role: "user",
-          content: `最近活动记录：\n${recentLogs}\n\n当前状态：今天是星期${currentWeekday}，现在是${currentHour}点。请给出建议。`
+          content: isEn ? userPromptEn : userPromptZh
         }
       ],
       response_format: { type: "json_object" }
     });
+
 
     res.json(JSON.parse(response.choices[0].message.content || '{"suggestions": []}'));
 
