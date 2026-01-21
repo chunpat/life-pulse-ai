@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LogEntry } from '../types';
 import { createPortal } from 'react-dom';
+import { parseLifeLog } from '../services/qwenService';
 
 interface HistoryProps {
   logs: LogEntry[];
@@ -11,7 +12,7 @@ interface HistoryProps {
 }
 
 const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
 
   const CATEGORY_MAP: Record<string, string> = useMemo(() => ({
@@ -43,6 +44,36 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
   const [swipedId, setSwipedId] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<LogEntry | null>(null);
+  const [isReanalyzing, setIsReanalyzing] = useState(false);
+
+  const handleReanalyze = async () => {
+    if (!selectedLog) return;
+    
+    setIsReanalyzing(true);
+    try {
+      // 传递当前语言环境，确保重新解析时使用正确的语言
+      const parsed = await parseLifeLog(selectedLog.rawText, i18n?.language);
+      
+      const updatedLog: LogEntry = {
+        ...selectedLog,
+        activity: parsed.activity,
+        category: parsed.category as any,
+        durationMinutes: parsed.durationMinutes,
+        mood: parsed.mood,
+        importance: parsed.importance,
+        updatedAt: Date.now()
+      };
+      
+      onUpdate(updatedLog);
+      setSelectedLog(updatedLog);
+    } catch (error) {
+      console.error("Re-analyze failed", error);
+      alert(t('common.reanalyze_failed', '重新分析失败，请重试'));
+    } finally {
+      setIsReanalyzing(false);
+    }
+  };
+
 
   // 筛选状态
   const [showFilters, setShowFilters] = useState(false);
@@ -422,13 +453,33 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
                   <DetailItem label={t('history.form.time')} value={new Date(selectedLog.timestamp).toLocaleString(undefined)} />
                 </div>
 
-                <button 
-                  onClick={startEditing}
-                  className="w-full mt-4 bg-slate-900 text-white py-3 rounded-2xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-slate-200"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-                  {t('history.btn.edit')}
-                </button>
+                <div className="flex gap-3 mt-4">
+                  <button 
+                    onClick={handleReanalyze}
+                    disabled={isReanalyzing}
+                    className="flex-1 bg-indigo-50 text-indigo-600 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all hover:bg-indigo-100 disabled:opacity-70 disabled:cursor-wait"
+                  >
+                    {isReanalyzing ? (
+                       <svg className="animate-spin h-5 w-5 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                        {t('history.btn.reanalyze', 'AI 重新分析')}
+                      </>
+                    )}
+                  </button>
+
+                  <button 
+                    onClick={startEditing}
+                    className="flex-1 bg-slate-900 text-white py-3 rounded-2xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all shadow-lg shadow-slate-200"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                    {t('history.btn.edit')}
+                  </button>
+                </div>
               </>
             )}
           </div>

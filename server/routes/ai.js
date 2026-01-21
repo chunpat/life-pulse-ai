@@ -22,25 +22,27 @@ router.post('/parse', async (req, res) => {
     }
 
     // Determine language based on parameter or header
-    // Default to 'zh' if 'zh' is present in lang or header, otherwise 'en' if 'en' is present, else 'zh'
+    // 只要包含 zh 就认为是中文，否则如果包含 en 认为是英文，默认中文
     const reqLang = lang || req.headers['accept-language'] || 'zh';
-    const isEn = reqLang.toLowerCase().includes('en') && !reqLang.toLowerCase().includes('zh');
+    const isEn = !reqLang.toLowerCase().includes('zh') && reqLang.toLowerCase().includes('en');
+
+    console.log(`AI Parse - Input: ${text.substring(0, 20)}... | Lang param: ${lang} | Header: ${req.headers['accept-language']} | Resolved Lang: ${reqLang} | isEn: ${isEn}`);
 
     const systemPromptZh = `你是一位专业的生活记录及财务助手。你的任务是从用户的随手记笔记中提取活动元数据以及财务消费情况。
 请返回纯 JSON 格式，不要包含 Markdown 格式（如 \`\`\`json）。
 
 1. **生活记录** (作为根对象的属性):
-   - activity: 活动内容摘要(请使用中文)
+   - activity: 活动内容摘要(请严格使用中文，除非用户输入完全是英文)
    - category: 必须是以下之一：Work, Leisure, Health, Chores, Social, Other。
    - durationMinutes: 估算时长(分钟)
-   - mood: 心情(如：开心、疲惫、高效)
+   - mood: 心情(使用中文，如：开心、疲惫、高效)
    - importance: 1-5分
 
 2. **财务记录** (放入 finance 数组中, 如果没有则为空数组):
    - type: "EXPENSE" (支出) 或 "INCOME" (收入)
    - amount: 金额 (数字)
    - category: 类别 (如: 餐饮, 交通, 购物, 工资, 理财 等)
-   - description: 描述
+   - description: 描述 (使用中文)
 
 返回格式示例：
 {
