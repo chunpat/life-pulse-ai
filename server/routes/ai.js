@@ -120,9 +120,25 @@ router.post('/insight', authenticateToken, async (req, res) => {
       return res.status(500).json({ message: '服务器未配置 AI API Key' });
     }
 
-    const logSummary = logs.map(l => `${l.activity} (耗时 ${l.durationMinutes}分钟, 类别 ${l.category})`).join(', ');
-
     const isEn = lang && lang.startsWith('en');
+
+    // 简单的类别汉化映射
+    const categoryMapZh = {
+      'Work': '工作',
+      'Leisure': '休闲',
+      'Health': '健康',
+      'Social': '社交',
+      'Chores': '家务',
+      'Other': '其他'
+    };
+
+    const logSummary = logs.map(l => {
+      // 如果不是英文模式，尝试将类别转为中文
+      const displayCategory = !isEn ? (categoryMapZh[l.category] || l.category) : l.category;
+      return `${l.activity} (耗时 ${l.durationMinutes}分钟, 类别 ${displayCategory})`;
+    }).join(', ');
+
+    const periodTextMap = isEn ? {
     const periodTextMap = isEn ? {
       'day': 'day',
       'week': 'week',
