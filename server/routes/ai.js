@@ -139,7 +139,6 @@ router.post('/insight', authenticateToken, async (req, res) => {
     }).join(', ');
 
     const periodTextMap = isEn ? {
-    const periodTextMap = isEn ? {
       'day': 'day',
       'week': 'week',
       'month': 'month'
