@@ -51,9 +51,10 @@ router.get('/stats', authenticateToken, async (req, res) => {
 // 创建新记录
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { type, amount, category, description, transactionDate } = req.body;
+    const { type, amount, category, description, transactionDate, logId } = req.body;
     const newRecord = await FinanceRecord.create({
       userId: req.user.id,
+      logId,
       type,
       amount,
       category,
@@ -63,6 +64,47 @@ router.post('/', authenticateToken, async (req, res) => {
     res.status(201).json(newRecord);
   } catch (err) {
     res.status(400).json({ message: err.message });
+  }
+});
+
+// 批量同步日志关联的财务记录 (覆盖模式)
+router.post('/sync/:logId', authenticateToken, async (req, res) => {
+  const { logId } = req.params;
+  const { records } = req.body; // Array of record objects
+
+  if (!logId) return res.status(400).json({ message: 'Missing logId' });
+  
+  const sequelize = require('../config/database');
+  const t = await sequelize.transaction();
+
+  try {
+    // 1. 删除旧关联记录
+    await FinanceRecord.destroy({
+      where: { 
+        userId: req.user.id,
+        logId: logId
+      },
+      transaction: t
+    });
+
+    // 2. 批量插入新记录
+    if (records && records.length > 0) {
+      const newRecords = records.map(r => ({
+        ...r,
+        userId: req.user.id,
+        logId: logId,
+        transactionDate: r.transactionDate || new Date()
+      }));
+      
+      await FinanceRecord.bulkCreate(newRecords, { transaction: t });
+    }
+
+    await t.commit();
+    res.json({ message: 'Sync successful', count: records ? records.length : 0 });
+  } catch (err) {
+    await t.rollback();
+    console.error('Sync Finance Error:', err);
+    res.status(500).json({ message: err.message });
   }
 });
 

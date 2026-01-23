@@ -42,6 +42,7 @@ export interface DaySummary {
 export interface FinanceRecord {
   id?: string;
   userId?: string;
+  logId?: string; // 关联的日志ID
   type: 'EXPENSE' | 'INCOME';
   amount: number;
   currency?: string;

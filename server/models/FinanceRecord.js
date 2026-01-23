@@ -11,6 +11,11 @@ const FinanceRecord = sequelize.define('FinanceRecord', {
     type: DataTypes.UUID,
     allowNull: false
   },
+  logId: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    comment: '关联的日志条目ID'
+  },
   type: {
     type: DataTypes.ENUM('EXPENSE', 'INCOME'),
     allowNull: false,

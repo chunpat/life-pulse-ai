@@ -361,37 +361,40 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
     try {
       const parsed = await parseLifeLog(inputText, i18n.language);
 
+      // 生成统一的 ID，确保 Log 和 Finance 使用同一个 ID 关联
+      const newLogId = generateUUID();
+
       // 自动保存财务记录
       if (parsed.finance && parsed.finance.length > 0) {
         try {
-          await Promise.all(parsed.finance.map(f => createFinanceRecord(f)));
-          // 可以考虑使用更优雅的 Toast 提示
-          // alert(`已自动记录 ${parsed.finance.length} 笔财务账单`); 
+          // 关联 logId 并创建财务记录
+          await Promise.all(parsed.finance.map(f => createFinanceRecord({ ...f, logId: newLogId })));
         } catch (e) {
-          console.error("Failed to save finance", e);
+          console.error("Finance create failed", e);
         }
       }
 
       const newEntry: LogEntry = {
-        id: generateUUID(),
-        userId: userId,
+        id: newLogId,
+        userId, 
         timestamp: Date.now(),
         rawText: inputText,
-        activity: parsed.activity || '未知活动',
-        category: parsed.category || 'Other',
+        activity: parsed.activity || inputText,
+        category: (parsed.category as any) || 'Other',
         durationMinutes: parsed.durationMinutes || 0,
-        mood: parsed.mood || '中性',
-        importance: (parsed.importance as any) || 3,
-        images: uploadedImages,
+        mood: parsed.mood || '平静',
+        importance: parsed.importance || 3,
         location: currentLocation,
+        images: uploadedImages
       };
+
       onAddLog(newEntry);
       setInputText('');
       setUploadedImages([]);
       setCurrentLocation(undefined);
-    } catch (err) {
-      console.error("提交失败:", err);
-      alert(`AI 解析失败: ${err.message}`);
+    } catch (e) {
+      console.error(e);
+      alert(t('logger.parse_failed', '解析失败，已按普通记录保存')); 
     } finally {
       setIsProcessing(false);
     }

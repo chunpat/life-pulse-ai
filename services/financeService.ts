@@ -90,7 +90,7 @@ export const createFinanceRecord = async (record: Partial<FinanceRecord>): Promi
   // Local/Guest mode
   const newRecord = {
       ...record,
-      id: Date.now().toString(),
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
       userId: 'guest_local',
       transactionDate: record.transactionDate || new Date().toISOString()
   } as FinanceRecord;
@@ -100,6 +100,38 @@ export const createFinanceRecord = async (record: Partial<FinanceRecord>): Promi
   saveLocalRecords(records);
   
   return newRecord;
+};
+
+// 新增：批量同步(更新/覆盖)某个日志的财务记录
+export const syncFinanceRecordsForLog = async (logId: string, records: Partial<FinanceRecord>[]): Promise<void> => {
+  const token = localStorage.getItem('lifepulse_token');
+
+  if (token) {
+    const response = await fetch(`${API_BASE_URL}/sync/${logId}`, {
+        method: 'POST',
+        headers: {
+        ...getAuthHeader(),
+        'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ records })
+    });
+    if (!response.ok) throw new Error('Failed to sync records');
+    return;
+  }
+
+  // Local/Guest mode: Remove old logs with this logId and add new ones
+  const allRecords = getLocalRecords();
+  const keptRecords = allRecords.filter(r => r.logId !== logId);
+  
+  const newRecords = records.map(r => ({
+      ...r,
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+      userId: 'guest_local',
+      logId: logId,
+      transactionDate: r.transactionDate || new Date().toISOString()
+  })) as FinanceRecord[];
+
+  saveLocalRecords([...newRecords, ...keptRecords]);
 };
 
 export const deleteFinanceRecord = async (id: string): Promise<void> => {

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { LogEntry } from '../types';
 import { createPortal } from 'react-dom';
 import { parseLifeLog } from '../services/qwenService';
+import { syncFinanceRecordsForLog } from '../services/financeService';
 
 interface HistoryProps {
   logs: LogEntry[];
@@ -54,6 +55,15 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
       // 传递当前语言环境，确保重新解析时使用正确的语言
       const parsed = await parseLifeLog(selectedLog.rawText, i18n?.language);
       
+      // 更新关联的财务记录，确保使用原始日志的时间
+      if (parsed.finance) {
+        const financeWithDate = parsed.finance.map(f => ({
+          ...f,
+          transactionDate: new Date(selectedLog.timestamp).toISOString()
+        }));
+        await syncFinanceRecordsForLog(selectedLog.id, financeWithDate);
+      }
+
       const updatedLog: LogEntry = {
         ...selectedLog,
         activity: parsed.activity,
