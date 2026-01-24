@@ -24,6 +24,14 @@ const User = sequelize.define('User', {
   password: {
     type: DataTypes.STRING,
     allowNull: false
+  },
+  referrerId: {
+    type: DataTypes.UUID,
+    allowNull: true
+  },
+  source: {
+    type: DataTypes.STRING,
+    allowNull: true
   }
 }, {
   hooks: {

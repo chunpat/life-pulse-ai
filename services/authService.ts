@@ -4,11 +4,11 @@ import { User } from '../types';
 const API_BASE_URL = '/api/auth';
 
 export const authService = {
-  async register(name: string, email: string, password: string): Promise<{ token: string; user: User }> {
+  async register(name: string, email: string, password: string, referrerId?: string, source?: string): Promise<{ token: string; user: User }> {
     const response = await fetch(`${API_BASE_URL}/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify({ name, email, password, referrerId, source }),
     });
     
     if (!response.ok) {

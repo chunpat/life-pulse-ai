@@ -56,6 +56,24 @@
     "profile_menu": "User Menu",
     "logout": "Logout"
   },
+  "invite": {
+    "menu_btn": "Invite Friends",
+    "title": "Invite Friends",
+    "desc": "Share your link to track referrals with AI",
+    "platform": "Promotion Platform (Optional)",
+    "platform_placeholder": "e.g. WeChat, Xiaohongshu",
+    "copy_btn": "Copy Link",
+    "copied_btn": "Copied!",
+    "link_label": "INVITE LINK",
+    "user_id_label": "User ID",
+    "platforms": {
+      "wechat_oa": "WeChat Official Account",
+      "xiaohongshu": "Xiaohongshu (RedNote)",
+      "wechat_moments": "WeChat Moments",
+      "wechat_friend": "WeChat Friend",
+      "other": "Other"
+    }
+  },
   "logger": {
     "placeholder": "What did you do? (e.g., 'Coded for 2 hours, felt productive!')",
     "voice_input": "Voice Input",

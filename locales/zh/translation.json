@@ -56,6 +56,24 @@
     "profile_menu": "用户菜单",
     "logout": "退出"
   },
+  "invite": {
+    "menu_btn": "邀请好友",
+    "title": "邀请好友",
+    "desc": "分享你的专属链接，通过 AI 记录生活轨迹",
+    "platform": "推广平台 (选填)",
+    "platform_placeholder": "例如：微信公众号，小红书",
+    "copy_btn": "复制链接",
+    "copied_btn": "已复制！",
+    "link_label": "邀请链接",
+    "user_id_label": "用户 ID",
+    "platforms": {
+      "wechat_oa": "微信公众号",
+      "xiaohongshu": "小红书",
+      "wechat_moments": "朋友圈",
+      "wechat_friend": "微信好友",
+      "other": "其他"
+    }
+  },
   "logger": {
     "placeholder": "刚才做了什么？（例如：'写代码 2 小时，感觉非常高效！'）",
     "voice_input": "语音录入",

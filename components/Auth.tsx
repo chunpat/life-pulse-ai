@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { User, AuthStatus } from '../types';
 import { authService } from '../services/authService';
@@ -15,8 +15,33 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onContinueAsGuest }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [referrerId, setReferrerId] = useState<string | null>(null);
+  const [source, setSource] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // Check URL params for referral info
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get('ref');
+    const src = params.get('source');
+    
+    if (ref) {
+      setReferrerId(ref);
+      sessionStorage.setItem('referrerId', ref);
+    } else {
+      const storedRef = sessionStorage.getItem('referrerId');
+      if (storedRef) setReferrerId(storedRef);
+    }
+    
+    if (src) {
+      setSource(src);
+      sessionStorage.setItem('source', src);
+    } else {
+      const storedSrc = sessionStorage.getItem('source');
+      if (storedSrc) setSource(storedSrc);
+    }
+  }, []);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,7 +55,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onContinueAsGuest }) => {
         onLogin(data.user, data.token);
       } else {
         // 注册
-        const data = await authService.register(name, email, password);
+        const data = await authService.register(name, email, password, referrerId || undefined, source || undefined);
         onLogin(data.user, data.token);
       }
     } catch (err: any) {

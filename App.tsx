@@ -7,6 +7,7 @@ import Analytics from './components/Analytics';
 import Finance from './components/Finance';
 import Auth from './components/Auth';
 import { Layout } from './components/Layout';
+import InviteTools from './components/InviteTools';
 import { storageService } from './services/storageService';
 
 const GUEST_STORAGE_USER = 'guest_user_v1';
@@ -21,6 +22,7 @@ const App: React.FC = () => {
   const [dailyInsight, setDailyInsight] = useState<string>('');
   const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
   const lastAnalyzedFingerprint = React.useRef<string>('');
 
   // 初始化用户状态
@@ -157,6 +159,7 @@ const App: React.FC = () => {
       onLogout={handleLogout}
       showGuide={showGuide}
       onCloseGuide={handleCloseGuide}
+      onShowInvite={() => setShowInvite(true)}
     >
       {view === ViewMode.LOGGER && (
         <Logger 
@@ -181,6 +184,9 @@ const App: React.FC = () => {
           isGenerating={isGeneratingInsight}
           onLoginClick={handleLogout}
         />
+      )}
+      {showInvite && user && (
+        <InviteTools user={user} onClose={() => setShowInvite(false)} />
       )}
     </Layout>
   );
