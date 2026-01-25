@@ -256,7 +256,7 @@ Return in JSON format:
     { 
       "id": "gen-id",
       "type": "health" | "work_life_balance" | "productivity" | "other",
-      "content": "Suggestion content, tone should be natural and warm like a friend (within 20 words)",
+      "content": "Suggestion content in English. Tone should be natural and warm like a friend (within 20 words)",
       "trigger": "Trigger reason (e.g., detected 3 consecutive late nights)"
     }
   ]

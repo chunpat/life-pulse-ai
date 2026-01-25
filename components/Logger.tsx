@@ -62,6 +62,12 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
       }
       return;
     }
+    
+    // If we missed cache due to language mismatch, clear the current displayed suggestion immediately
+    // so user doesn't see the wrong language while loading
+    if (lastLang !== i18n.language) {
+       setSuggestion(null);
+    }
 
     const fetchSuggestion = async () => {
       try {
