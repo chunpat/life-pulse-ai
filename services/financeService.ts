@@ -1,12 +1,8 @@
 import { FinanceRecord } from '../types';
+import { apiClient } from './apiClient';
 
 const API_BASE_URL = '/api/finance';
 const FINANCE_STORAGE_KEY = 'lifepulse_finance_v1';
-
-const getAuthHeader = () => {
-  const token = localStorage.getItem('lifepulse_token');
-  return token ? { 'Authorization': `Bearer ${token}` } : {};
-};
 
 const getLocalRecords = (): FinanceRecord[] => {
   const saved = localStorage.getItem(FINANCE_STORAGE_KEY);
@@ -22,14 +18,9 @@ export const fetchFinanceRecords = async (): Promise<FinanceRecord[]> => {
   
   if (token) {
     try {
-      const response = await fetch(API_BASE_URL, {
-        headers: getAuthHeader()
-      });
-      if (response.ok) {
-        const data = await response.json();
-        saveLocalRecords(data);
-        return data;
-      }
+      const data = await apiClient(API_BASE_URL);
+      saveLocalRecords(data);
+      return data;
     } catch (e) {
       console.warn('Failed to fetch from backend, falling back to local', e);
     }
@@ -42,13 +33,9 @@ export const fetchFinanceStats = async (startDate?: string, endDate?: string): P
     const token = localStorage.getItem('lifepulse_token');
     
     if (token) {
-        let url = `${API_BASE_URL}/stats`;
-        if (startDate && endDate) {
-            url += `?startDate=${startDate}&endDate=${endDate}`;
-        }
-        const response = await fetch(url, { headers: getAuthHeader() });
-        if (!response.ok) throw new Error('Failed to fetch stats');
-        return response.json();
+        return apiClient(`${API_BASE_URL}/stats`, {
+            params: startDate && endDate ? { startDate, endDate } : undefined
+        });
     }
     
     // Calculate stats locally for guest mode or offline
@@ -75,16 +62,10 @@ export const createFinanceRecord = async (record: Partial<FinanceRecord>): Promi
   const token = localStorage.getItem('lifepulse_token');
 
   if (token) {
-    const response = await fetch(API_BASE_URL, {
+    return apiClient(API_BASE_URL, {
         method: 'POST',
-        headers: {
-        ...getAuthHeader(),
-        'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(record)
+        body: record
     });
-    if (!response.ok) throw new Error('Failed to create record');
-    return response.json();
   }
 
   // Local/Guest mode
@@ -107,16 +88,10 @@ export const syncFinanceRecordsForLog = async (logId: string, records: Partial<F
   const token = localStorage.getItem('lifepulse_token');
 
   if (token) {
-    const response = await fetch(`${API_BASE_URL}/sync/${logId}`, {
+    return apiClient(`${API_BASE_URL}/sync/${logId}`, {
         method: 'POST',
-        headers: {
-        ...getAuthHeader(),
-        'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ records })
+        body: { records }
     });
-    if (!response.ok) throw new Error('Failed to sync records');
-    return;
   }
 
   // Local/Guest mode: Remove old logs with this logId and add new ones
@@ -138,12 +113,9 @@ export const deleteFinanceRecord = async (id: string): Promise<void> => {
   const token = localStorage.getItem('lifepulse_token');
 
   if (token) {
-    const response = await fetch(`${API_BASE_URL}/${id}`, {
-        method: 'DELETE',
-        headers: getAuthHeader()
+    return apiClient(`${API_BASE_URL}/${id}`, {
+        method: 'DELETE'
     });
-    if (!response.ok) throw new Error('Failed to delete record');
-    return;
   }
 
   // Local/Guest mode

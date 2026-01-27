@@ -28,11 +28,18 @@ const App: React.FC = () => {
   // 初始化用户状态
   useEffect(() => {
     const savedUser = localStorage.getItem(GUEST_STORAGE_USER);
-    const token = localStorage.getItem(AUTH_TOKEN);
     // 这里未来可以增加一个 verify token 的请求
     if (savedUser) {
       setUser(JSON.parse(savedUser));
     }
+
+    const handleUnauthorized = () => {
+      handleLogout();
+      alert('登录已过期，请重新登录');
+    };
+
+    window.addEventListener('unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('unauthorized', handleUnauthorized);
   }, []);
 
   // Load logs on mount or user change

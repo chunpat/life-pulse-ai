@@ -1,14 +1,10 @@
 import { LogEntry } from '../types';
+import { apiClient } from './apiClient';
 
 const STORAGE_KEY = 'lifepulse_logs_v1';
 const TOKEN_KEY = 'lifepulse_token';
 const API_BASE_URL = '/api/logs';
 const UPLOAD_API_URL = '/api/upload';
-
-const getAuthHeader = () => {
-  const token = localStorage.getItem(TOKEN_KEY);
-  return token ? { 'Authorization': `Bearer ${token}` } : {};
-};
 
 export const storageService = {
   // 获取所有记录
@@ -18,15 +14,10 @@ export const storageService = {
     // 如果有 token，优先从后端获取
     if (token) {
       try {
-        const response = await fetch(API_BASE_URL, {
-          headers: getAuthHeader()
-        });
-        if (response.ok) {
-          const logs = await response.json();
-          // 更新本地缓存，以便离线查看
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(logs));
-          return logs;
-        }
+        const logs = await apiClient(API_BASE_URL);
+        // 更新本地缓存，以便离线查看
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(logs));
+        return logs;
       } catch (e) {
         console.warn("Backend fetch failed, falling back to local storage", e);
       }
@@ -49,21 +40,12 @@ export const storageService = {
     // 后端保存
     if (token) {
       try {
-        const response = await fetch(API_BASE_URL, {
+        await apiClient(API_BASE_URL, {
           method: 'POST',
-          headers: {
-            ...getAuthHeader(),
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(entry)
+          body: entry
         });
-        if (response.ok) {
-          // 保存成功后更新本地缓存
-          const freshLog = await response.json();
-          const logs = await storageService.getLogs();
-          // 注意：getLogs 已经更新了本地缓存，我们只需确保合并
-          return;
-        }
+        // 注意：getLogs 已经更新了本地缓存，我们只需确保合并
+        return;
       } catch (e) {
         console.error("Backend save failed", e);
       }
@@ -81,15 +63,10 @@ export const storageService = {
     
     if (token) {
       try {
-        const response = await fetch(`${API_BASE_URL}/${id}`, {
-          method: 'DELETE',
-          headers: getAuthHeader()
+        await apiClient(`${API_BASE_URL}/${id}`, {
+          method: 'DELETE'
         });
-        if (response.ok) {
-          // 更新本地缓存
-          const logs = await storageService.getLogs();
-          return;
-        }
+        return;
       } catch (e) {
         console.error("Backend delete failed", e);
       }
@@ -106,18 +83,11 @@ export const storageService = {
     
     if (token) {
       try {
-        const response = await fetch(`${API_BASE_URL}/${updatedLog.id}`, {
+        await apiClient(`${API_BASE_URL}/${updatedLog.id}`, {
           method: 'PUT',
-          headers: {
-            ...getAuthHeader(),
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(updatedLog)
+          body: updatedLog
         });
-        if (response.ok) {
-          const logs = await storageService.getLogs();
-          return;
-        }
+        return;
       } catch (e) {
         console.error("Backend update failed", e);
       }
@@ -138,18 +108,12 @@ export const storageService = {
         const logs = JSON.parse(localLogs);
         if (logs.length === 0) return;
 
-        const response = await fetch(`${API_BASE_URL}/sync`, {
+        await apiClient(`${API_BASE_URL}/sync`, {
           method: 'POST',
-          headers: {
-            ...getAuthHeader(),
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ logs })
+          body: { logs }
         });
         
-        if (response.ok) {
-          console.log("Sync local logs to cloud successful");
-        }
+        console.log("Sync local logs to cloud successful");
       } catch (e) {
         console.error("Sync to cloud failed", e);
       }
@@ -161,18 +125,11 @@ export const storageService = {
     const formData = new FormData();
     formData.append('image', file);
 
-    const response = await fetch(`${UPLOAD_API_URL}/image`, {
+    const data = await apiClient(`${UPLOAD_API_URL}/image`, {
       method: 'POST',
-      headers: getAuthHeader(),
       body: formData
     });
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || '图片上传失败');
-    }
-
-    const data = await response.json();
     return data.url;
   }
 };

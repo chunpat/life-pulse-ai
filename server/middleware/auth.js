@@ -11,8 +11,8 @@ const authenticateToken = (req, res, next) => {
   jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret_key', (err, user) => {
     if (err) {
       console.error('JWT Verification Error:', err.message);
-      return res.status(403).json({ 
-        message: 'Token 无效或已过期', 
+      return res.status(401).json({ 
+        message: 'Token 无效或已过期，请重新登录', 
         error: err.message 
       });
     }

@@ -1,55 +1,27 @@
 import { LogEntry, ParseResult } from '../types';
+import { apiClient } from './apiClient';
 
 const API_BASE_URL = '/api/ai';
 
-const getAuthHeader = () => {
-  const token = localStorage.getItem('lifepulse_token');
-  return token ? { 'Authorization': `Bearer ${token}` } : {};
-};
-
 export const parseLifeLog = async (text: string, lang?: string): Promise<ParseResult> => {
-  const response = await fetch(`${API_BASE_URL}/parse`, {
+  return apiClient(`${API_BASE_URL}/parse`, {
     method: 'POST',
-    headers: {
-      ...getAuthHeader(),
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ text, lang })
+    body: { text, lang }
   });
-
-  if (!response.ok) {
-    let errorMessage = 'AI 解析失败';
-    try {
-      const errorData = await response.json();
-      errorMessage = errorData.message || errorMessage;
-    } catch (e) {
-      // 如果响应不是 JSON（例如 500 Proxy Error），则使用状态文本
-      errorMessage = `Server Error: ${response.status} ${response.statusText}`;
-    }
-    throw new Error(errorMessage);
-  }
-
-  return response.json();
 };
 
 export const getDailyInsight = async (logs: LogEntry[], period: 'day' | 'week' | 'month' = 'day', lang: string = 'zh'): Promise<string> => {
   if (logs.length === 0) return JSON.stringify({ summary: "暂无数据", bulletPoints: [] });
   
-  const response = await fetch(`${API_BASE_URL}/insight`, {
-    method: 'POST',
-    headers: {
-      ...getAuthHeader(),
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ logs, period, lang })
-  });
-
-  if (!response.ok) {
+  try {
+    const data = await apiClient(`${API_BASE_URL}/insight`, {
+      method: 'POST',
+      body: { logs, period, lang }
+    });
+    return data.insight || "无法生成洞察";
+  } catch (e) {
     return "暂时无法生成洞察";
   }
-
-  const data = await response.json();
-  return data.insight || "无法生成洞察";
 };
 
 export const getSmartSuggestions = async (logs: LogEntry[], lang: string = 'zh'): Promise<any> => {
@@ -59,23 +31,17 @@ export const getSmartSuggestions = async (logs: LogEntry[], lang: string = 'zh')
   const currentHour = now.getHours();
   const currentWeekday = now.getDay(); // 0-6
 
-  const response = await fetch(`${API_BASE_URL}/suggestions`, {
-    method: 'POST',
-    headers: {
-      ...getAuthHeader(),
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ 
-      logs: logs.slice(0, 50), 
-      currentHour,
-      currentWeekday,
-      lang
-    })
-  });
-
-  if (!response.ok) {
+  try {
+    return await apiClient(`${API_BASE_URL}/suggestions`, {
+      method: 'POST',
+      body: { 
+        logs: logs.slice(0, 50), 
+        currentHour,
+        currentWeekday,
+        lang
+      }
+    });
+  } catch (e) {
     return { suggestions: [] };
   }
-
-  return response.json();
 };
