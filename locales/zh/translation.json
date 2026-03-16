@@ -17,11 +17,11 @@
     "cancel_view": "再看看已记录的"
   },
   "app": {
-    "title": "LifePulse",
-    "subtitle": "智能生活记录助手"
+    "title": "爱记录",
+    "subtitle": "记下每一天，慢慢看见变化"
   },
   "auth": {
-    "subtitle": "用 AI 捕捉生活的每一次脉动",
+    "subtitle": "把今天记下来，生活会更清晰",
     "nickname": "昵称",
     "nickname_placeholder": "请输入您的昵称",
     "login_identifier": "昵称 / 邮箱",
@@ -59,7 +59,7 @@
   "invite": {
     "menu_btn": "邀请好友",
     "title": "邀请好友",
-    "desc": "分享你的专属链接，通过 AI 记录生活轨迹",
+    "desc": "分享你的专属链接，一起把日常轻松记下来",
     "platform": "推广平台 (选填)",
     "platform_placeholder": "例如：微信公众号，小红书",
     "copy_btn": "复制链接",
@@ -72,6 +72,98 @@
       "wechat_moments": "朋友圈",
       "wechat_friend": "微信好友",
       "other": "其他"
+    }
+  },
+  "goals": {
+    "title": "连续记录",
+    "active_label": "正在坚持",
+    "start_title": "先给自己定个小目标",
+    "start_desc": "从今天开始，给自己一个轻一点的坚持。",
+    "start_prompt": "今天记一下，离目标更近一步。",
+    "compose_label": "新建计划",
+    "compose_title": "先把这次坚持定下来",
+    "type_label": "计划周期",
+    "type_7_day": "7 天冲刺",
+    "type_7_day_desc": "适合重新找回记录节奏",
+    "type_21_day": "21 天养成",
+    "type_21_day_desc": "适合把记录变成习惯",
+    "name_label": "计划名字",
+    "name_placeholder": "例如：7 天早睡记录",
+    "reward_label": "完成奖励",
+    "reward_placeholder": "例如：奖励自己一杯咖啡",
+    "reward_hint": "可以先写一个小奖励，后面也能扩展成你的产品奖励。",
+    "reward_badge": "完成奖励：{{reward}}",
+    "reward_inline": "奖励：{{reward}}",
+    "no_reward": "暂未设置",
+    "create": "创建计划",
+    "delete": "删除计划",
+    "resume": "恢复继续",
+    "compose_collapsed": "展开",
+    "compose_expanded": "收起",
+    "delete_confirm": "确定删除“{{title}}”吗？删除后不会再出现在计划记录里。",
+    "today_done": "今天已完成，继续保持。",
+    "today_pending": "今天还没记，先写下一件小事吧。",
+    "pause": "暂停目标",
+    "ongoing_title": "正在进行",
+    "active_count": "同时进行 {{count}} 个计划",
+    "parallel_desc": "今天写一条记录，会同步推进今天还没打卡的进行中计划。",
+    "progress_label": "进度",
+    "streak_label": "连续天数",
+    "remaining_label": "剩余天数",
+    "today_label": "今天状态",
+    "today_short_done": "已完成",
+    "today_short_pending": "未完成",
+    "filter_all": "全部目标",
+    "detail": "所属目标",
+    "checkin_badge": "目标打卡",
+    "day_number_short": "第 {{day}} 天",
+    "analytics_title": "目标进度",
+    "analytics_empty": "还没有开启连续记录目标。",
+    "analytics_today_done": "今天已经记下来了，离完成又近一步。",
+    "analytics_today_pending": "今天记一下，连续记录就能继续往前走。",
+    "completed_hint": "已经完成全部 {{days}} 天，准备开始下一轮也不错。",
+    "failed_hint": "这次中断了也没关系，重新开始一个小目标就行。",
+    "paused_hint": "计划已暂停，不会继续判定中断；想继续时可以直接恢复。",
+    "resume_hint": "可以恢复之前的计划，也可以再开一个新的连续记录。",
+    "resume_detail": "恢复后会继续剩余进度，但连续天数会从 0 重新计算。",
+    "pause_detail": "暂停后不会被判定中断；恢复时继续剩余进度，但连续天数会从 0 重新计算。",
+    "add_more_title": "继续添加计划",
+    "add_more_desc": "已有计划时这里默认折叠，你随时可以展开再加新的计划。",
+    "multi_active_hint": "计划可以多个同时进行。今天写一次，会同步推进今天还没打卡的进行中计划。",
+    "delete_policy_hint": "删除规则：未开始的计划可直接删除；已开始的计划每月最多删除 1 次。",
+    "started_badge": "已开始",
+    "not_started_badge": "未开始",
+    "operation_failed": "操作失败，请稍后再试。",
+    "records_title": "计划记录",
+    "records_desc": "完成的、暂停的、失败的计划都会留在这里。",
+    "progress_inline": "进度 {{current}} / {{total}}",
+    "last_checkin": "最近一次记录：{{date}}",
+    "not_started_record": "还没有完成过打卡",
+    "title_presets": {
+      "7_day": {
+        "focus_reset": "7 天专注重启",
+        "workout_restart": "7 天运动回归",
+        "daily_capture": "7 天日常记录",
+        "reading_restart": "7 天阅读重启"
+      },
+      "21_day": {
+        "early_sleep": "21 天早睡养成",
+        "daily_review": "21 天日更复盘",
+        "exercise_habit": "21 天运动习惯",
+        "writing_habit": "21 天写作养成"
+      }
+    },
+    "reward_presets": {
+      "coffee": "买杯喜欢的咖啡",
+      "movie": "看一场电影",
+      "rest_half_day": "给自己半天放松",
+      "small_gift": "买个小礼物"
+    },
+    "status": {
+      "active": "进行中",
+      "paused": "已暂停",
+      "completed": "已完成",
+      "failed": "已中断"
     }
   },
   "logger": {
@@ -88,9 +180,13 @@
     "wechat_error": "微信录音启动失败。请确保您已授权微信访问麦克风。",
     "wechat_hint": "检测到微信环境。通常 iOS 微信会拦截网页原生语音接口。您可以点击右上角“在 Safari 中打开”，或确保系统已正确配置并授权微信 JS-SDK。",
     "browser_voice_hint": "请点击地址栏的 🔒 或设置图标开启麦克风权限，然后点击此按钮重试。",
+    "share_meta": {
+      "title": "爱记录 AI - 记下每一天",
+      "desc": "和朋友一起把日常轻松记下来，慢慢看见变化。"
+    },
     "share_overlay": {
       "title": "邀请好友一起记录",
-      "desc": "让 AI 帮助你们发现生活中的小确幸。\n分享给朋友，一起开启智能生活记录。",
+      "desc": "让 AI 帮你们把日常轻松记下来。\n分享给朋友，一起开始连续记录。",
       "click_menu": "点击右上角菜单",
       "select_friend": "选择 \"发送给朋友\"",
       "button": "我知道了"

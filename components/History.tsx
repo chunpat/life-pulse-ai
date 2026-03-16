@@ -1,18 +1,19 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LogEntry } from '../types';
+import { Goal, LogEntry } from '../types';
 import { createPortal } from 'react-dom';
 import { parseLifeLog } from '../services/qwenService';
 import { syncFinanceRecordsForLog } from '../services/financeService';
 
 interface HistoryProps {
   logs: LogEntry[];
+  goals: Goal[];
   onDelete: (id: string) => void;
   onUpdate: (updatedLog: LogEntry) => void;
 }
 
-const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
+const History: React.FC<HistoryProps> = ({ logs, goals, onDelete, onUpdate }) => {
   const { t, i18n } = useTranslation();
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
 
@@ -89,7 +90,12 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
   const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('All');
+  const [filterGoalId, setFilterGoalId] = useState<string>('All');
   const [filterDate, setFilterDate] = useState<string>(''); // YYYY-MM-DD
+  const goalMap = useMemo(() => goals.reduce<Record<string, Goal>>((acc, goal) => {
+    acc[goal.id] = goal;
+    return acc;
+  }, {}), [goals]);
 
   // 导出数据格式化
   const getExportData = () => {
@@ -149,6 +155,7 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
 
   // 执行筛选逻辑
   const filteredLogs = logs.filter(log => {
+    const goalBadges = resolveLogGoalBadges(log, goalMap);
     // 文本搜索 (匹配活动名称或原始文本)
     const matchesSearch = searchTerm === '' || 
       log.activity.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -156,13 +163,17 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
     
     // 分类筛选
     const matchesCategory = filterCategory === 'All' || log.category === filterCategory;
+
+    // 目标筛选
+    const matchesGoal = filterGoalId === 'All' || goalBadges.some(goal => goal.goalId === filterGoalId);
     
     // 日期筛选
     const logDate = new Date(log.timestamp).toISOString().split('T')[0];
     const matchesDate = filterDate === '' || logDate === filterDate;
 
-    return matchesSearch && matchesCategory && matchesDate;
+    return matchesSearch && matchesCategory && matchesGoal && matchesDate;
   });
+  const selectedGoalBadges = selectedLog ? resolveLogGoalBadges(selectedLog, goalMap) : [];
 
   if (logs.length === 0) {
     return (
@@ -212,7 +223,7 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
               </svg>
             </div>
             <span className="text-sm font-bold text-slate-700">{t('history.filter_title')}</span>
-            {(searchTerm || filterCategory !== 'All' || filterDate) && (
+            {(searchTerm || filterCategory !== 'All' || filterGoalId !== 'All' || filterDate) && (
               <span className="flex h-2 w-2 rounded-full bg-amber-500 animate-pulse"></span>
             )}
           </div>
@@ -281,6 +292,22 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
               </div>
             </div>
 
+            {goals.length > 0 && (
+              <div className="relative">
+                <select
+                  value={filterGoalId}
+                  onChange={(e) => setFilterGoalId(e.target.value)}
+                  className="w-full bg-slate-50 border-none rounded-xl py-2 pl-3 pr-8 text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 focus:ring-indigo-500/20"
+                >
+                  <option value="All">{t('goals.filter_all')}</option>
+                  {goals.map(goal => (
+                    <option key={goal.id} value={goal.id}>{goal.title}</option>
+                  ))}
+                </select>
+                <svg className="w-4 h-4 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+              </div>
+            )}
+
             {/* 导出按钮 */}
             <div className="flex gap-2 pt-2 border-t border-slate-50">
               <button 
@@ -314,6 +341,7 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
           filteredLogs.map((log, index) => {
             const dateLabel = getDateLabel(log.timestamp);
             const prevLog = filteredLogs[index - 1];
+            const goalBadges = resolveLogGoalBadges(log, goalMap);
             // If first or date diff, show header
             const showHeader = index === 0 || dateLabel !== getDateLabel(prevLog.timestamp);
 
@@ -334,6 +362,7 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
                     onDelete={() => setLogToDelete(log)}
                     onDoubleClick={() => setSelectedLog(log)}
                     t={t}
+                    goalBadges={goalBadges}
                     categoryLabel={CATEGORY_MAP[log.category] || log.category}
                   />
                 </div>
@@ -347,6 +376,7 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
               onClick={() => {
                 setSearchTerm('');
                 setFilterCategory('All');
+                setFilterGoalId('All');
                 setFilterDate('');
               }}
               className="mt-3 text-indigo-600 text-xs font-bold hover:underline"
@@ -452,6 +482,21 @@ const History: React.FC<HistoryProps> = ({ logs, onDelete, onUpdate }) => {
                 <div className="grid grid-cols-2 gap-4 mt-2">
                   <DetailItem label={t('history.form.activity')} value={selectedLog.activity} />
                   <DetailItem label={t('history.form.category')} value={CATEGORY_MAP[selectedLog.category] || selectedLog.category} />
+                  {selectedGoalBadges.length > 0 && (
+                    <DetailItem
+                      label={t('goals.detail')}
+                      value={(
+                        <div className="flex flex-wrap gap-2">
+                          {selectedGoalBadges.map(goal => (
+                            <span key={`${goal.goalId}-${goal.dayNumber || 0}`} className="px-2.5 py-1 rounded-full bg-amber-50 text-amber-600 text-xs font-bold">
+                              {goal.goalLabel}{goal.dayNumber ? ` · ${t('goals.day_number_short', { day: goal.dayNumber })}` : ''}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      className="text-amber-500"
+                    />
+                  )}
                   <DetailItem label={t('history.form.duration')} value={`${selectedLog.durationMinutes} min`} />
                   <DetailItem label={t('history.form.mood')} value={selectedLog.mood} />
                   <DetailItem 
@@ -527,8 +572,9 @@ const HistoryItem: React.FC<{
   onDelete: () => void;
   onDoubleClick: () => void;
   t: any;
+  goalBadges: ResolvedGoalBadge[];
   categoryLabel: string;
-}> = ({ log, isSwiped, onSwipe, onDelete, onDoubleClick, t, categoryLabel }) => {
+}> = ({ log, isSwiped, onSwipe, onDelete, onDoubleClick, t, goalBadges, categoryLabel }) => {
   const [offsetX, setOffsetX] = useState(0);
   const touchStart = useRef<number | null>(null);
   const itemRef = useRef<HTMLDivElement>(null);
@@ -614,6 +660,15 @@ const HistoryItem: React.FC<{
               )}
             </div>
             <h3 className="font-bold text-slate-800 line-clamp-2 text-sm leading-snug">{log.activity}</h3>
+            {goalBadges.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {goalBadges.map(goal => (
+                  <span key={`${goal.goalId}-${goal.dayNumber || 0}`} className="px-2 py-1 rounded-full bg-amber-50 text-[11px] font-bold text-amber-600">
+                    {goal.goalLabel}{goal.dayNumber ? ` · ${t('goals.day_number_short', { day: goal.dayNumber })}` : ''}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
           
           <div className="flex flex-col items-end gap-2">
@@ -711,6 +766,34 @@ const getCategoryColor = (cat: string) => {
     case 'Chores': return 'bg-amber-100 text-amber-600';
     default: return 'bg-slate-100 text-slate-600';
   }
+};
+
+type ResolvedGoalBadge = {
+  goalId: string;
+  goalLabel: string;
+  dayNumber?: number;
+};
+
+const resolveLogGoalBadges = (log: LogEntry, goalMap: Record<string, Goal>): ResolvedGoalBadge[] => {
+  if (Array.isArray(log.goalCheckins) && log.goalCheckins.length > 0) {
+    return log.goalCheckins
+      .filter(goal => Boolean(goal.goalId) && Boolean(goal.goalLabel || goalMap[goal.goalId]?.title))
+      .map(goal => ({
+        goalId: goal.goalId,
+        goalLabel: goal.goalLabel || goalMap[goal.goalId]?.title || '',
+        dayNumber: goal.dayNumber
+      }));
+  }
+
+  if (log.goalId || log.goalLabel) {
+    return [{
+      goalId: log.goalId || '',
+      goalLabel: log.goalLabel || (log.goalId ? goalMap[log.goalId]?.title || '' : ''),
+      dayNumber: log.goalDayNumber
+    }].filter(goal => Boolean(goal.goalId) || Boolean(goal.goalLabel));
+  }
+
+  return [];
 };
 
 export default History;

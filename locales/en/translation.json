@@ -18,10 +18,10 @@
   },
   "app": {
     "title": "LifePulse",
-    "subtitle": "Smart Life Logger"
+    "subtitle": "Write down each day and notice your progress"
   },
   "auth": {
-    "subtitle": "Capture every pulse of life with AI",
+    "subtitle": "Write down today, and life becomes easier to review",
     "nickname": "Nickname",
     "nickname_placeholder": "Enter your nickname",
     "login_identifier": "Nickname / Email",
@@ -59,7 +59,7 @@
   "invite": {
     "menu_btn": "Invite Friends",
     "title": "Invite Friends",
-    "desc": "Share your link to track referrals with AI",
+    "desc": "Share your link and start logging daily life together",
     "platform": "Promotion Platform (Optional)",
     "platform_placeholder": "e.g. WeChat, Xiaohongshu",
     "copy_btn": "Copy Link",
@@ -72,6 +72,98 @@
       "wechat_moments": "WeChat Moments",
       "wechat_friend": "WeChat Friend",
       "other": "Other"
+    }
+  },
+  "goals": {
+    "title": "Daily streaks",
+    "active_label": "In progress",
+    "start_title": "Set a small goal first",
+    "start_desc": "Start with something light and keep it going.",
+    "start_prompt": "Log something today and move one step closer.",
+    "compose_label": "New plan",
+    "compose_title": "Define this streak before you begin",
+    "type_label": "Duration",
+    "type_7_day": "7-day Sprint",
+    "type_7_day_desc": "Great for getting back into logging",
+    "type_21_day": "21-day Habit",
+    "type_21_day_desc": "Great for turning logging into a routine",
+    "name_label": "Plan name",
+    "name_placeholder": "For example: 7-day early sleep streak",
+    "reward_label": "Completion reward",
+    "reward_placeholder": "For example: Buy myself a good coffee",
+    "reward_hint": "Start with a small reward now. You can evolve this into a product reward later.",
+    "reward_badge": "Reward: {{reward}}",
+    "reward_inline": "Reward: {{reward}}",
+    "no_reward": "Not set yet",
+    "create": "Create Plan",
+    "delete": "Delete",
+    "resume": "Resume",
+    "compose_collapsed": "Expand",
+    "compose_expanded": "Collapse",
+    "delete_confirm": "Delete \"{{title}}\"? It will be removed from your plan records.",
+    "today_done": "Today is already done. Keep going.",
+    "today_pending": "Nothing logged today yet. Start with one small thing.",
+    "pause": "Pause Goal",
+    "ongoing_title": "Ongoing",
+    "active_count": "{{count}} plans running in parallel",
+    "parallel_desc": "One log today will advance every active plan that has not checked in yet.",
+    "progress_label": "Progress",
+    "streak_label": "Streak",
+    "remaining_label": "Left",
+    "today_label": "Today",
+    "today_short_done": "Done",
+    "today_short_pending": "Pending",
+    "filter_all": "All goals",
+    "detail": "Goal",
+    "checkin_badge": "Goal check-in",
+    "day_number_short": "Day {{day}}",
+    "analytics_title": "Goal progress",
+    "analytics_empty": "You have not started a streak goal yet.",
+    "analytics_today_done": "You logged today, so your streak is still moving.",
+    "analytics_today_pending": "Log something today to keep the streak alive.",
+    "completed_hint": "You finished all {{days}} days. Starting another round is a good idea.",
+    "failed_hint": "This streak was interrupted. You can always start a new one.",
+    "paused_hint": "This plan is paused, so it will not fail while paused. Resume it whenever you are ready.",
+    "resume_hint": "You can resume the paused plan or start a new streak right away.",
+    "resume_detail": "Resuming keeps the remaining progress, but the streak count restarts from 0.",
+    "pause_detail": "Paused plans will not fail. When resumed, remaining progress stays, but the streak count restarts from 0.",
+    "add_more_title": "Add another plan",
+    "add_more_desc": "Once you already have plans, this section stays collapsed until you want to add more.",
+    "multi_active_hint": "Plans can run at the same time. One log today advances every active plan that has not checked in yet.",
+    "delete_policy_hint": "Delete rule: plans without a first check-in can be deleted freely; started plans can be deleted only once per month.",
+    "started_badge": "Started",
+    "not_started_badge": "Not started",
+    "operation_failed": "Action failed. Please try again.",
+    "records_title": "Plan records",
+    "records_desc": "Completed, paused, and interrupted plans all stay here.",
+    "progress_inline": "Progress {{current}} / {{total}}",
+    "last_checkin": "Last check-in: {{date}}",
+    "not_started_record": "No check-in yet",
+    "title_presets": {
+      "7_day": {
+        "focus_reset": "7-day focus reset",
+        "workout_restart": "7-day workout reset",
+        "daily_capture": "7-day daily logging",
+        "reading_restart": "7-day reading reset"
+      },
+      "21_day": {
+        "early_sleep": "21-day early sleep routine",
+        "daily_review": "21-day daily review",
+        "exercise_habit": "21-day workout routine",
+        "writing_habit": "21-day writing habit"
+      }
+    },
+    "reward_presets": {
+      "coffee": "Buy myself a favorite coffee",
+      "movie": "Watch a movie",
+      "rest_half_day": "Take half a day off",
+      "small_gift": "Get a small gift"
+    },
+    "status": {
+      "active": "Active",
+      "paused": "Paused",
+      "completed": "Completed",
+      "failed": "Interrupted"
     }
   },
   "logger": {
@@ -88,9 +180,13 @@
     "wechat_error": "WeChat recording failed. Please ensure microphone access is granted.",
     "wechat_hint": "WeChat environment detected. iOS WeChat may block native voice APIs. Open in Safari or check JS-SDK config.",
     "browser_voice_hint": "Please enable microphone permission in the address bar (🔒 icon) and try again.",
+    "share_meta": {
+      "title": "LifePulse AI - Write down each day",
+      "desc": "Log daily life with friends and notice progress over time."
+    },
     "share_overlay": {
       "title": "Invite Friends",
-      "desc": "Let AI help you discover life's little joys.\nShare with friends to start tracking together.",
+      "desc": "Let AI help you write daily life down with less effort.\nShare with friends and start a streak together.",
       "click_menu": "Tap the top-right menu",
       "select_friend": "Select \"Send to Friend\"",
       "button": "Got it"

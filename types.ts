@@ -1,12 +1,56 @@
 
 export type AuthStatus = 'unauthenticated' | 'guest' | 'authenticated';
 
+export type GoalType = '7_DAY' | '21_DAY';
+export type GoalStatus = 'active' | 'paused' | 'completed' | 'failed';
+
+export interface LogGoalCheckin {
+  goalId: string;
+  goalLabel: string;
+  dayNumber: number;
+}
+
+export interface GoalCreateInput {
+  goalType: GoalType;
+  title?: string;
+  rewardTitle?: string;
+}
+
 export interface User {
   id: string;
   name: string;
   email?: string;
   avatar?: string;
   status: AuthStatus;
+}
+
+export interface Goal {
+  id: string;
+  userId: string;
+  title: string;
+  rewardTitle?: string | null;
+  goalType: GoalType;
+  totalDays: number;
+  completedDays: number;
+  currentStreak: number;
+  startedAt: number;
+  completedAt?: number | null;
+  lastCheckInDate?: string | null;
+  status: GoalStatus;
+  metadata?: Record<string, unknown>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface GoalCheckin {
+  id: string;
+  goalId: string;
+  userId: string;
+  logId: string;
+  dateKey: string;
+  dayNumber: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface LogEntry {
@@ -21,6 +65,11 @@ export interface LogEntry {
   importance: 1 | 2 | 3 | 4 | 5;
   tags?: string[];
   images?: string[];
+  goalId?: string;
+  goalLabel?: string;
+  goalDayNumber?: number;
+  isGoalCheckIn?: boolean;
+  goalCheckins?: LogGoalCheckin[];
   location?: {
     name: string;
     latitude?: number;

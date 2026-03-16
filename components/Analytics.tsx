@@ -2,11 +2,12 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
-import { LogEntry } from '../types';
+import { Goal, LogEntry } from '../types';
 import { getDailyInsight } from '../services/qwenService';
 
 interface AnalyticsProps {
   logs: LogEntry[];
+  goals: Goal[];
   isGuest?: boolean;
   insight: string;
   isGenerating: boolean;
@@ -15,8 +16,17 @@ interface AnalyticsProps {
 
 const COLORS = ['#4F46E5', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#64748B'];
 
+const formatDateKey = (value: number | string | Date) => {
+  const date = new Date(value);
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 const Analytics: React.FC<AnalyticsProps> = ({ 
   logs, 
+  goals,
   isGuest = false,
   insight: defaultInsight,
   isGenerating: isDefaultGenerating,
@@ -125,6 +135,20 @@ const Analytics: React.FC<AnalyticsProps> = ({
   const totalTime = useMemo(() => {
     return filteredLogs.reduce((acc, log) => acc + log.durationMinutes, 0);
   }, [filteredLogs]);
+  const activeGoals = useMemo(() => goals.filter(goal => goal.status === 'active'), [goals]);
+  const latestGoal = useMemo(() => activeGoals[0] || goals[0] || null, [activeGoals, goals]);
+  const todayGoalDone = latestGoal?.lastCheckInDate === formatDateKey(Date.now());
+  const latestGoalProgress = latestGoal ? Math.min((latestGoal.completedDays / latestGoal.totalDays) * 100, 100) : 0;
+  const goalStatusText = latestGoal ? t(`goals.status.${latestGoal.status}`) : '';
+  const goalSummaryText = latestGoal
+    ? latestGoal.status === 'active'
+      ? (todayGoalDone ? t('goals.analytics_today_done') : t('goals.analytics_today_pending'))
+      : latestGoal.status === 'completed'
+        ? t('goals.completed_hint', { days: latestGoal.totalDays })
+        : latestGoal.status === 'failed'
+          ? t('goals.failed_hint')
+          : t('goals.resume_hint')
+    : t('goals.analytics_empty');
 
   const hours = Math.floor(totalTime / 60);
   const mins = totalTime % 60;
@@ -221,6 +245,57 @@ const Analytics: React.FC<AnalyticsProps> = ({
         <div className="absolute bottom-[-10%] left-[-10%] w-40 h-40 bg-purple-500/20 rounded-full blur-3xl"></div>
       </div>
 
+      {!isGuest && (
+        <div className="bg-white border border-slate-100 rounded-3xl p-6 shadow-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{t('goals.analytics_title')}</p>
+              <h3 className="text-xl font-black text-slate-900 tracking-tight">
+                {latestGoal ? latestGoal.title : t('goals.title')}
+              </h3>
+              {activeGoals.length > 1 && (
+                <p className="mt-2 text-sm text-slate-500 leading-relaxed">
+                  {t('goals.active_count', { count: activeGoals.length })}
+                </p>
+              )}
+            </div>
+            {latestGoal && (
+              <span className="px-3 py-1.5 rounded-full bg-slate-100 text-[11px] font-bold text-slate-500 whitespace-nowrap">
+                {goalStatusText}
+              </span>
+            )}
+          </div>
+
+          {latestGoal ? (
+            <>
+              <div className="grid grid-cols-3 gap-3 mt-5">
+                <GoalStat label={t('goals.progress_label')} value={`${latestGoal.completedDays}/${latestGoal.totalDays}`} />
+                <GoalStat label={t('goals.streak_label')} value={`${latestGoal.currentStreak}`} />
+                <GoalStat label={t('goals.today_label')} value={todayGoalDone ? t('goals.today_short_done') : t('goals.today_short_pending')} />
+              </div>
+
+              <div className="mt-5 h-2 rounded-full bg-slate-100 overflow-hidden">
+                <div className="h-full rounded-full bg-emerald-400 transition-all duration-500" style={{ width: `${latestGoalProgress}%` }}></div>
+              </div>
+
+              {latestGoal.rewardTitle && (
+                <p className="mt-4 text-sm font-medium text-amber-700 leading-relaxed">
+                  {t('goals.reward_inline', { reward: latestGoal.rewardTitle })}
+                </p>
+              )}
+
+              <p className="mt-4 text-sm text-slate-600 leading-relaxed">
+                {goalSummaryText}
+              </p>
+            </>
+          ) : (
+            <p className="mt-4 text-sm text-slate-500 leading-relaxed">
+              {goalSummaryText}
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-4">
         <StatCard label={t('analytics.stat.duration')} value={`${Math.floor(totalTime / 60)}h ${totalTime % 60}m`} sub={t(`analytics.stat.${period}_stat`)} />
         <StatCard label={t('analytics.stat.count')} value={filteredLogs.length.toString()} sub={t('analytics.stat.total_records')} />
@@ -294,6 +369,13 @@ const StatCard: React.FC<{ label: string; value: string; sub: string }> = ({ lab
     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{label}</p>
     <p className="text-2xl font-bold text-slate-800">{value}</p>
     <p className="text-[10px] text-slate-500 font-medium">{sub}</p>
+  </div>
+);
+
+const GoalStat: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+  <div className="rounded-2xl bg-slate-50 px-3 py-4 text-center border border-slate-100">
+    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{label}</p>
+    <p className="mt-1 text-lg font-black text-slate-900">{value}</p>
   </div>
 );
 

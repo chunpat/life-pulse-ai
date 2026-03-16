@@ -51,6 +51,28 @@ const Log = sequelize.define('Log', {
   location: {
     type: DataTypes.JSON,
     allowNull: true
+  },
+  goalId: {
+    type: DataTypes.UUID,
+    allowNull: true
+  },
+  goalLabel: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  goalDayNumber: {
+    type: DataTypes.INTEGER,
+    allowNull: true
+  },
+  isGoalCheckIn: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false
+  },
+  goalCheckins: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    defaultValue: []
   }
 }, {
   paranoid: true

@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { parseLifeLog, getSmartSuggestions } from '../services/qwenService';
 import { createFinanceRecord } from '../services/financeService';
 import { storageService } from '../services/storageService';
-import { LogEntry } from '../types';
+import { Goal, GoalCreateInput, LogEntry } from '../types';
+import GoalPlanner from './GoalPlanner';
 
 // 兼容性 UUID 生成函数
 function generateUUID(): string {
@@ -25,9 +26,27 @@ interface LoggerProps {
   userId: string;
   isGuest?: boolean;
   logs: LogEntry[]; // Changed from logsCount to logs array
+  goals: Goal[];
+  isGoalActionLoading?: boolean;
+  onCreateGoal: (goalInput: GoalCreateInput) => Promise<void>;
+  onPauseGoal: (goalId: string) => Promise<void>;
+  onResumeGoal: (goalId: string) => Promise<void>;
+  onDeleteGoal: (goalId: string) => Promise<void>;
 }
 
-const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = false, logs }) => {
+const Logger: React.FC<LoggerProps> = ({
+  onAddLog,
+  onLogout,
+  userId,
+  isGuest = false,
+  logs,
+  goals,
+  isGoalActionLoading = false,
+  onCreateGoal,
+  onPauseGoal,
+  onResumeGoal,
+  onDeleteGoal
+}) => {
   const { t, i18n } = useTranslation();
   const [inputText, setInputText] = useState('');
   const [suggestion, setSuggestion] = useState<{content: string, type: string, trigger: string} | null>(null);
@@ -210,8 +229,8 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
               const currentUrl = window.location.href.split('#')[0];
               
               const shareData = {
-                title: 'LifePulse AI - 智能生活记录助手',
-                desc: 'AI 帮你统计与分析生活点滴。',
+                title: t('logger.share_meta.title'),
+                desc: t('logger.share_meta.desc'),
                 link: currentUrl,
                 // 图片建议使用 300x300 及以上，绝对路径，且不能是透明背景的 PNG（白色背景更稳）
                 imgUrl: window.location.origin + '/pwa-512x512.png', 
@@ -252,7 +271,7 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
       recognitionRef.current = new SpeechRecognition();
       recognitionRef.current.continuous = false;
       recognitionRef.current.interimResults = false;
-      recognitionRef.current.lang = 'zh-CN';
+      recognitionRef.current.lang = i18n.language.startsWith('en') ? 'en-US' : 'zh-CN';
 
       recognitionRef.current.onresult = (event: any) => {
         const transcript = event.results[0][0].transcript;
@@ -271,7 +290,7 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
 
       recognitionRef.current.onend = () => setIsListening(false);
     }
-  }, []);
+  }, [i18n.language, t]);
 
   const toggleListening = () => {
     // 重置权限错误状态，允许用户重试
@@ -408,6 +427,17 @@ const Logger: React.FC<LoggerProps> = ({ onAddLog, onLogout, userId, isGuest = f
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {!isGuest && (
+        <GoalPlanner
+          goals={goals}
+          logsCount={logs.length}
+          isGoalActionLoading={isGoalActionLoading}
+          onCreateGoal={onCreateGoal}
+          onPauseGoal={onPauseGoal}
+          onResumeGoal={onResumeGoal}
+          onDeleteGoal={onDeleteGoal}
+        />
+      )}
       
       {suggestion && (
         <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex items-start gap-3 relative overflow-hidden group">

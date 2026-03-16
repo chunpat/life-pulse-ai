@@ -27,9 +27,9 @@ export default defineConfig(({ mode }) => {
           registerType: 'autoUpdate',
           includeAssets: ['apple-touch-icon.png'],
           manifest: {
-            name: 'LifePulse AI - 智能生活记录',
-            short_name: 'LifePulse',
-            description: '基于 AI 的智能生活日志与时间管理助手',
+            name: 'LifePulse AI · 爱记录',
+            short_name: '爱记录',
+            description: '记下每一天，慢慢看见变化',
             theme_color: '#6366f1',
             icons: [
               {

@@ -38,12 +38,14 @@ const authRoutes = require('./routes/auth');
 const logRoutes = require('./routes/logs');
 const aiRoutes = require('./routes/ai');
 const financeRoutes = require('./routes/finance');
+const goalRoutes = require('./routes/goals');
 const uploadRoutes = require('./routes/upload');
 const wechatRoutes = require('./routes/wechat');
 app.use('/api/auth', authRoutes);
 app.use('/api/logs', logRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/finance', financeRoutes);
+app.use('/api/goals', goalRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/wechat', wechatRoutes);
 
@@ -57,6 +59,8 @@ const PORT = process.env.PORT || 5002;
 const User = require('./models/User');
 const Log = require('./models/Log');
 const FinanceRecord = require('./models/FinanceRecord');
+const Goal = require('./models/Goal');
+const GoalCheckin = require('./models/GoalCheckin');
 
 sequelize.sync({ alter: true })
   .then(() => {

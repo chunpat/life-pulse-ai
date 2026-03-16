@@ -34,18 +34,16 @@ export const storageService = {
   },
 
   // 保存记录
-  saveLog: async (entry: LogEntry): Promise<void> => {
+  saveLog: async (entry: LogEntry): Promise<LogEntry> => {
     const token = localStorage.getItem(TOKEN_KEY);
     
     // 后端保存
     if (token) {
       try {
-        await apiClient(API_BASE_URL, {
+        return await apiClient(API_BASE_URL, {
           method: 'POST',
           body: entry
         });
-        // 注意：getLogs 已经更新了本地缓存，我们只需确保合并
-        return;
       } catch (e) {
         console.error("Backend save failed", e);
       }
@@ -55,6 +53,7 @@ export const storageService = {
     const logs = await storageService.getLogs();
     const newLogs = [entry, ...logs];
     localStorage.setItem(STORAGE_KEY, JSON.stringify(newLogs));
+    return entry;
   },
 
   // 删除记录

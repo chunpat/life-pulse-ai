@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router();
+const { randomUUID } = require('crypto');
 const Log = require('../models/Log');
 const authenticateToken = require('../middleware/auth');
+const { applyLogGoalCheckin } = require('../services/goalService');
 
 // 获取所有日志
 router.get('/', authenticateToken, async (req, res) => {
@@ -19,8 +21,9 @@ router.get('/', authenticateToken, async (req, res) => {
 // 添加新日志
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { rawText, activity, category, durationMinutes, mood, importance, timestamp, metadata, images, location } = req.body;
-    const log = await Log.create({
+    const { id, rawText, activity, category, durationMinutes, mood, importance, timestamp, metadata, images, location } = req.body;
+    const baseLog = {
+      id: id || randomUUID(),
       userId: req.user.id,
       rawText,
       activity,
@@ -32,7 +35,10 @@ router.post('/', authenticateToken, async (req, res) => {
       metadata,
       images,
       location
-    });
+    };
+
+    const { logData } = await applyLogGoalCheckin(req.user.id, baseLog);
+    const log = await Log.create(logData);
     res.status(201).json(log);
   } catch (error) {
     res.status(500).json({ message: '创建日志失败', error: error.message });
@@ -77,7 +83,26 @@ router.post('/sync', authenticateToken, async (req, res) => {
       id: log.id || undefined // 让数据库生成或使用传来的ID
     }));
 
-    await Log.bulkCreate(logsWithUserId, { updateOnDuplicate: ['id'] });
+    await Log.bulkCreate(logsWithUserId, {
+      updateOnDuplicate: [
+        'rawText',
+        'activity',
+        'category',
+        'durationMinutes',
+        'mood',
+        'importance',
+        'timestamp',
+        'metadata',
+        'images',
+        'location',
+        'goalId',
+        'goalLabel',
+        'goalDayNumber',
+        'isGoalCheckIn',
+        'goalCheckins',
+        'updatedAt'
+      ]
+    });
     res.json({ message: '同步成功', count: logs.length });
   } catch (error) {
     res.status(500).json({ message: '批量同步失败', error: error.message });
