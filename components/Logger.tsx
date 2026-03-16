@@ -27,7 +27,10 @@ interface LoggerProps {
   isGuest?: boolean;
   logs: LogEntry[]; // Changed from logsCount to logs array
   goals: Goal[];
+  isComposerOpen: boolean;
   isGoalActionLoading?: boolean;
+  onOpenComposer: () => void;
+  onCloseComposer: () => void;
   onCreateGoal: (goalInput: GoalCreateInput) => Promise<void>;
   onPauseGoal: (goalId: string) => Promise<void>;
   onResumeGoal: (goalId: string) => Promise<void>;
@@ -41,7 +44,10 @@ const Logger: React.FC<LoggerProps> = ({
   isGuest = false,
   logs,
   goals,
+  isComposerOpen,
   isGoalActionLoading = false,
+  onOpenComposer,
+  onCloseComposer,
   onCreateGoal,
   onPauseGoal,
   onResumeGoal,
@@ -63,6 +69,7 @@ const Logger: React.FC<LoggerProps> = ({
   const [showShareOverlay, setShowShareOverlay] = useState(false);
   const recognitionRef = useRef<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Fetch Smart Suggestions
   useEffect(() => {
@@ -292,6 +299,16 @@ const Logger: React.FC<LoggerProps> = ({
     }
   }, [i18n.language, t]);
 
+  useEffect(() => {
+    if (!isComposerOpen) return;
+
+    const timer = window.setTimeout(() => {
+      textareaRef.current?.focus();
+    }, 120);
+
+    return () => window.clearTimeout(timer);
+  }, [isComposerOpen]);
+
   const toggleListening = () => {
     // 重置权限错误状态，允许用户重试
     if (permissionDenied) {
@@ -417,12 +434,25 @@ const Logger: React.FC<LoggerProps> = ({
       setInputText('');
       setUploadedImages([]);
       setCurrentLocation(undefined);
+      onCloseComposer();
     } catch (e) {
       console.error(e);
       alert(t('logger.parse_failed', '解析失败，已按普通记录保存')); 
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handleQuickCompose = (text?: string) => {
+    if (text) {
+      setInputText(text);
+    }
+    onOpenComposer();
+  };
+
+  const handleCloseComposer = () => {
+    if (isProcessing) return;
+    onCloseComposer();
   };
 
   return (
@@ -466,146 +496,199 @@ const Logger: React.FC<LoggerProps> = ({
         </div>
       )}
 
-      <div className="bg-white border border-slate-200 rounded-[2rem] p-5 shadow-sm hover:shadow-md transition-shadow relative">
-        <textarea
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          placeholder={t('logger.placeholder')}
-          className="w-full bg-transparent border-none focus:ring-0 text-lg text-slate-800 placeholder:text-slate-400 min-h-[100px] pb-12 resize-none"
-        />
-        
-        {/* 附件预览区域 - 浮动在输入框下方 */}
-        {(uploadedImages.length > 0 || currentLocation) && (
-          <div className="flex flex-wrap gap-2 mb-4 px-1">
-            {uploadedImages.map((url, idx) => (
-              <div key={idx} className="relative group w-14 h-14 rounded-xl overflow-hidden border border-slate-100 shadow-sm">
-                <img src={url} alt="Uploaded" className="w-full h-full object-cover" />
-                <button
-                  type="button"
-                  onClick={() => setUploadedImages(prev => prev.filter((_, i) => i !== idx))}
-                  className="absolute inset-0 bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-              </div>
-            ))}
-            {currentLocation && (
-              <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 text-[11px] font-bold rounded-full border border-emerald-100 animate-fade-in max-w-full">
-                <svg className="w-3.5 h-3.5 flex-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                </svg>
-                <span className="truncate">{currentLocation.name}</span>
-                <button type="button" onClick={() => setCurrentLocation(undefined)} className="hover:text-emerald-900 ml-1 flex-none text-sm leading-none">×</button>
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="flex justify-between items-center bg-slate-50 -mx-5 -mb-5 px-5 py-3 rounded-b-[2rem] border-t border-slate-100">
-          <div className="flex items-center gap-2 relative overflow-x-auto no-scrollbar flex-1 mr-2 py-1">
-            <button 
-              type="button"
-              onClick={toggleListening}
-              className={`flex-none p-2.5 rounded-xl transition-all ${
-                isListening 
-                  ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-100' 
-                  : permissionDenied 
-                    ? 'bg-red-50 text-red-400' 
-                    : 'bg-white text-slate-500 hover:text-indigo-600 hover:bg-white shadow-sm border border-slate-100'
-              }`}
-              title={isListening ? t('logger.stop_recording') : t('logger.voice_input')}
-            >
-              <svg className="w-5 h-5 flex-none" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
-            </button>
-
-            {/* 图片上传按钮 */}
-            <input 
-              type="file" 
-              accept="image/*" 
-              className="hidden" 
-              ref={fileInputRef} 
-              onChange={handleImageUpload} 
-            />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading}
-              className={`flex-none p-2.5 rounded-xl bg-white text-slate-500 hover:text-indigo-600 shadow-sm border border-slate-100 transition-all ${isUploading ? 'animate-pulse' : ''}`}
-              title={t('logger.upload_image')}
-            >
-              {isUploading ? (
-                <svg className="w-5 h-5 animate-spin flex-none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-              ) : (
-                <svg className="w-5 h-5 flex-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              )}
-            </button>
-
-            {/* 地点捕捉按钮 */}
-            <button
-              type="button"
-              onClick={captureLocation}
-              disabled={isGettingLocation}
-              className={`flex-none p-2.5 rounded-xl transition-all shadow-sm border border-slate-100 ${currentLocation ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-white text-slate-500 hover:text-indigo-600 transition-colors'} ${isGettingLocation ? 'animate-bounce' : ''}`}
-              title={t('logger.capture_location')}
-            >
-              <svg className="w-5 h-5 flex-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </button>
-
-            {/* 微信转发按钮 */}
-            {isWeChat && (
-              <button
-                type="button"
-                onClick={() => setShowShareOverlay(true)}
-                className="flex-none p-2.5 rounded-xl bg-white text-slate-500 hover:text-indigo-600 shadow-sm border border-slate-100 transition-all"
-                title={t('logger.share')}
-              >
-                <svg className="w-5 h-5 flex-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                </svg>
-              </button>
-            )}
-
-            {permissionDenied && (
-              <div className="absolute top-full left-0 mt-2 w-max max-w-[200px] bg-red-50 text-red-500 text-xs p-2 rounded-lg border border-red-100 shadow-sm z-10 animate-in fade-in zoom-in-95 duration-200">
-                <p className="font-bold mb-1">{t('logger.voice_error_title')}</p>
-                {isWeChat ? (
-                  wxReady ? (
-                    <span>{t('logger.wechat_error')}</span>
-                  ) : (
-                    <span>{t('logger.wechat_hint')}</span>
-                  )
-                ) : (
-                  <span>{t('logger.browser_voice_hint')}</span>
-                )}
-              </div>
-            )}
+      <div className="bg-white border border-slate-200 rounded-[2rem] p-5 shadow-sm hover:shadow-md transition-shadow">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-indigo-500">
+              {t('logger.launcher_label')}
+            </p>
+            <h3 className="mt-1 text-2xl font-black tracking-tight text-slate-900">
+              {t('logger.launcher_title')}
+            </h3>
+            <p className="mt-2 text-sm text-slate-500 leading-relaxed">
+              {t('logger.launcher_desc')}
+            </p>
           </div>
 
-          <div className="relative flex-none">
-            <button
-              onClick={handleSubmit}
-              disabled={!inputText.trim() || isProcessing}
-              className={`px-6 py-3 rounded-full font-bold text-white transition-all whitespace-nowrap ${
-                isProcessing ? 'bg-slate-400 cursor-wait' : 'bg-indigo-600 hover:bg-indigo-700 active:scale-95 shadow-lg shadow-indigo-100'
-              }`}
-            >
-              {isProcessing ? t('logger.processing') : t('logger.submit')}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => handleQuickCompose()}
+            className="shrink-0 px-4 py-3 rounded-2xl bg-slate-900 text-white text-sm font-bold hover:bg-slate-800 transition-colors"
+          >
+            {t('logger.open_composer')}
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 mt-5">
+          <QuickTip text={t('logger.quick_tips.gym')} onClick={handleQuickCompose} />
+          <QuickTip text={t('logger.quick_tips.code')} onClick={handleQuickCompose} />
+          <QuickTip text={t('logger.quick_tips.date')} onClick={handleQuickCompose} />
+          <QuickTip text={t('logger.quick_tips.read')} onClick={handleQuickCompose} />
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <QuickTip text={t('logger.quick_tips.gym')} onClick={setInputText} />
-        <QuickTip text={t('logger.quick_tips.code')} onClick={setInputText} />
-        <QuickTip text={t('logger.quick_tips.date')} onClick={setInputText} />
-        <QuickTip text={t('logger.quick_tips.read')} onClick={setInputText} />
-      </div>
+      {isComposerOpen && (
+        <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="absolute inset-0 bg-black/45 backdrop-blur-sm" onClick={handleCloseComposer} />
+          <div className="relative z-10 w-full sm:max-w-xl bg-white rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl border border-slate-100 max-h-[88vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white/95 backdrop-blur-sm px-5 pt-5 pb-4 border-b border-slate-100 rounded-t-[2rem]">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-indigo-500">
+                    {t('logger.launcher_label')}
+                  </p>
+                  <h3 className="mt-1 text-2xl font-black tracking-tight text-slate-900">
+                    {t('logger.modal_title')}
+                  </h3>
+                  <p className="mt-2 text-sm text-slate-500 leading-relaxed">
+                    {t('logger.modal_desc')}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCloseComposer}
+                  className="p-2 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="bg-white border border-slate-200 rounded-[2rem] p-5 shadow-sm hover:shadow-md transition-shadow relative">
+                <textarea
+                  ref={textareaRef}
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  placeholder={t('logger.placeholder')}
+                  className="w-full bg-transparent border-none focus:ring-0 text-lg text-slate-800 placeholder:text-slate-400 min-h-[140px] pb-12 resize-none"
+                />
+
+                {(uploadedImages.length > 0 || currentLocation) && (
+                  <div className="flex flex-wrap gap-2 mb-4 px-1">
+                    {uploadedImages.map((url, idx) => (
+                      <div key={idx} className="relative group w-14 h-14 rounded-xl overflow-hidden border border-slate-100 shadow-sm">
+                        <img src={url} alt="Uploaded" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setUploadedImages(prev => prev.filter((_, i) => i !== idx))}
+                          className="absolute inset-0 bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                      </div>
+                    ))}
+                    {currentLocation && (
+                      <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 text-[11px] font-bold rounded-full border border-emerald-100 animate-fade-in max-w-full">
+                        <svg className="w-3.5 h-3.5 flex-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        </svg>
+                        <span className="truncate">{currentLocation.name}</span>
+                        <button type="button" onClick={() => setCurrentLocation(undefined)} className="hover:text-emerald-900 ml-1 flex-none text-sm leading-none">×</button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex justify-between items-center bg-slate-50 -mx-5 -mb-5 px-5 py-3 rounded-b-[2rem] border-t border-slate-100">
+                  <div className="flex items-center gap-2 relative overflow-x-auto no-scrollbar flex-1 mr-2 py-1">
+                    <button 
+                      type="button"
+                      onClick={toggleListening}
+                      className={`flex-none p-2.5 rounded-xl transition-all ${
+                        isListening 
+                          ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-100' 
+                          : permissionDenied 
+                            ? 'bg-red-50 text-red-400' 
+                            : 'bg-white text-slate-500 hover:text-indigo-600 hover:bg-white shadow-sm border border-slate-100'
+                      }`}
+                      title={isListening ? t('logger.stop_recording') : t('logger.voice_input')}
+                    >
+                      <svg className="w-5 h-5 flex-none" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+                    </button>
+
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      ref={fileInputRef} 
+                      onChange={handleImageUpload} 
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploading}
+                      className={`flex-none p-2.5 rounded-xl bg-white text-slate-500 hover:text-indigo-600 shadow-sm border border-slate-100 transition-all ${isUploading ? 'animate-pulse' : ''}`}
+                      title={t('logger.upload_image')}
+                    >
+                      {isUploading ? (
+                        <svg className="w-5 h-5 animate-spin flex-none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                      ) : (
+                        <svg className="w-5 h-5 flex-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={captureLocation}
+                      disabled={isGettingLocation}
+                      className={`flex-none p-2.5 rounded-xl transition-all shadow-sm border border-slate-100 ${currentLocation ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-white text-slate-500 hover:text-indigo-600 transition-colors'} ${isGettingLocation ? 'animate-bounce' : ''}`}
+                      title={t('logger.capture_location')}
+                    >
+                      <svg className="w-5 h-5 flex-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </button>
+
+                    {isWeChat && (
+                      <button
+                        type="button"
+                        onClick={() => setShowShareOverlay(true)}
+                        className="flex-none p-2.5 rounded-xl bg-white text-slate-500 hover:text-indigo-600 shadow-sm border border-slate-100 transition-all"
+                        title={t('logger.share')}
+                      >
+                        <svg className="w-5 h-5 flex-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                        </svg>
+                      </button>
+                    )}
+
+                    {permissionDenied && (
+                      <div className="absolute top-full left-0 mt-2 w-max max-w-[200px] bg-red-50 text-red-500 text-xs p-2 rounded-lg border border-red-100 shadow-sm z-10 animate-in fade-in zoom-in-95 duration-200">
+                        <p className="font-bold mb-1">{t('logger.voice_error_title')}</p>
+                        {isWeChat ? (
+                          wxReady ? (
+                            <span>{t('logger.wechat_error')}</span>
+                          ) : (
+                            <span>{t('logger.wechat_hint')}</span>
+                          )
+                        ) : (
+                          <span>{t('logger.browser_voice_hint')}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="relative flex-none">
+                    <button
+                      onClick={handleSubmit}
+                      disabled={!inputText.trim() || isProcessing}
+                      className={`px-6 py-3 rounded-full font-bold text-white transition-all whitespace-nowrap ${
+                        isProcessing ? 'bg-slate-400 cursor-wait' : 'bg-indigo-600 hover:bg-indigo-700 active:scale-95 shadow-lg shadow-indigo-100'
+                      }`}
+                    >
+                      {isProcessing ? t('logger.processing') : t('logger.submit')}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 微信分享引导蒙层 */}
       {showShareOverlay && (

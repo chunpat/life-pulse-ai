@@ -16,6 +16,7 @@ const AUTH_TOKEN = 'lifepulse_token';
 
 const App: React.FC = () => {
   const [view, setView] = useState<ViewMode>(ViewMode.LOGGER);
+  const [isLoggerComposerOpen, setIsLoggerComposerOpen] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -102,9 +103,24 @@ const App: React.FC = () => {
   const handleLogout = () => {
     setUser(null);
     setGoals([]);
+    setIsLoggerComposerOpen(false);
     localStorage.removeItem(GUEST_STORAGE_USER);
     localStorage.removeItem(AUTH_TOKEN);
   };
+
+  const handleViewChange = useCallback((nextView: ViewMode) => {
+    setView(nextView);
+    setIsLoggerComposerOpen(false);
+  }, []);
+
+  const handleOpenLoggerComposer = useCallback(() => {
+    setView(ViewMode.LOGGER);
+    setIsLoggerComposerOpen(true);
+  }, []);
+
+  const handleCloseLoggerComposer = useCallback(() => {
+    setIsLoggerComposerOpen(false);
+  }, []);
 
   const refreshGoals = useCallback(async () => {
     if (!user || user.status !== 'authenticated') {
@@ -256,7 +272,8 @@ const App: React.FC = () => {
   return (
     <Layout 
       currentView={view} 
-      onViewChange={setView} 
+      onViewChange={handleViewChange} 
+      onOpenLoggerComposer={handleOpenLoggerComposer}
       newLogAdded={newLogAdded}
       userName={user.name}
       onLogout={handleLogout}
@@ -272,7 +289,10 @@ const App: React.FC = () => {
           isGuest={user.status === 'guest'}
           logs={logs}
           goals={goals}
+          isComposerOpen={isLoggerComposerOpen}
           isGoalActionLoading={isGoalMutating}
+          onOpenComposer={handleOpenLoggerComposer}
+          onCloseComposer={handleCloseLoggerComposer}
           onCreateGoal={handleCreateGoal}
           onPauseGoal={handlePauseGoal}
           onResumeGoal={handleResumeGoal}

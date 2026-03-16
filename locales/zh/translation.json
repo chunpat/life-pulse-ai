@@ -167,6 +167,12 @@
     }
   },
   "logger": {
+    "launcher_label": "快速记录",
+    "launcher_title": "点底部 + 直接弹出",
+    "launcher_desc": "记录输入改成弹窗了，首页先留给计划和提醒，不再把输入区挤到下面。",
+    "open_composer": "开始记录",
+    "modal_title": "记录一下刚刚发生的事",
+    "modal_desc": "写一句、说一句，或者顺手带上图片和位置。",
     "placeholder": "刚才做了什么？（例如：'写代码 2 小时，感觉非常高效！'）",
     "voice_input": "语音录入",
     "stop_recording": "停止录音",

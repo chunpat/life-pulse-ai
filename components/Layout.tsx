@@ -8,6 +8,7 @@ interface LayoutProps {
   children: React.ReactNode;
   currentView: ViewMode;
   onViewChange: (view: ViewMode) => void;
+  onOpenLoggerComposer: () => void;
   newLogAdded?: boolean;
   userName?: string;
   onLogout?: () => void;
@@ -20,6 +21,7 @@ export const Layout: React.FC<LayoutProps> = ({
   children, 
   currentView, 
   onViewChange, 
+  onOpenLoggerComposer,
   newLogAdded = false,
   userName = '游客',
   onLogout,
@@ -153,7 +155,7 @@ export const Layout: React.FC<LayoutProps> = ({
           <div className="relative -top-8">
             <button
               id="nav-logger"
-              onClick={() => onViewChange(ViewMode.LOGGER)}
+              onClick={onOpenLoggerComposer}
               title={t('nav.logger')}
               className={`
                 w-14 h-14 rounded-full flex items-center justify-center 

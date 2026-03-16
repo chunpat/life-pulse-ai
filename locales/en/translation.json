@@ -167,6 +167,12 @@
     }
   },
   "logger": {
+    "launcher_label": "Quick log",
+    "launcher_title": "Tap + to open instantly",
+    "launcher_desc": "The input moved into a popup so the home page can stay focused on plans and prompts.",
+    "open_composer": "Start logging",
+    "modal_title": "Capture what just happened",
+    "modal_desc": "Type a line, speak a line, or attach a photo and location.",
     "placeholder": "What did you do? (e.g., 'Coded for 2 hours, felt productive!')",
     "voice_input": "Voice Input",
     "stop_recording": "Stop Recording",
