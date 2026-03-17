@@ -217,8 +217,8 @@ const History: React.FC<HistoryProps> = ({ logs, goals, onDelete, onUpdate }) =>
           className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors"
         >
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center">
-              <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-8 h-8 rounded-full bg-amber-50 flex items-center justify-center">
+              <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
               </svg>
             </div>
@@ -246,7 +246,7 @@ const History: React.FC<HistoryProps> = ({ logs, goals, onDelete, onUpdate }) =>
                 placeholder={t('history.search_placeholder')} 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-slate-50 border-none rounded-2xl py-3 pl-11 pr-4 text-sm focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all"
+                className="w-full bg-slate-50 border-none rounded-2xl py-3 pl-11 pr-4 text-sm focus:ring-2 focus:ring-amber-400/30 outline-none transition-all"
               />
               <svg className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -264,7 +264,7 @@ const History: React.FC<HistoryProps> = ({ logs, goals, onDelete, onUpdate }) =>
                 <select 
                   value={filterCategory}
                   onChange={(e) => setFilterCategory(e.target.value)}
-                  className="w-full bg-slate-50 border-none rounded-xl py-2 pl-3 pr-8 text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  className="w-full bg-slate-50 border-none rounded-xl py-2 pl-3 pr-8 text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 focus:ring-amber-400/30"
                 >
                   <option value="All">{t('history.category_all')}</option>
                   {Object.entries(CATEGORY_MAP).map(([key, label]) => (
@@ -279,7 +279,7 @@ const History: React.FC<HistoryProps> = ({ logs, goals, onDelete, onUpdate }) =>
                   type="date"
                   value={filterDate}
                   onChange={(e) => setFilterDate(e.target.value)}
-                  className="w-full bg-slate-50 border-none rounded-xl py-2 px-3 text-xs font-bold text-slate-600 outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  className="w-full bg-slate-50 border-none rounded-xl py-2 px-3 text-xs font-bold text-slate-600 outline-none focus:ring-2 focus:ring-amber-400/30"
                 />
                 {filterDate && (
                   <button 
@@ -297,7 +297,7 @@ const History: React.FC<HistoryProps> = ({ logs, goals, onDelete, onUpdate }) =>
                 <select
                   value={filterGoalId}
                   onChange={(e) => setFilterGoalId(e.target.value)}
-                  className="w-full bg-slate-50 border-none rounded-xl py-2 pl-3 pr-8 text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  className="w-full bg-slate-50 border-none rounded-xl py-2 pl-3 pr-8 text-xs font-bold text-slate-600 appearance-none outline-none focus:ring-2 focus:ring-amber-400/30"
                 >
                   <option value="All">{t('goals.filter_all')}</option>
                   {goals.map(goal => (
@@ -349,7 +349,7 @@ const History: React.FC<HistoryProps> = ({ logs, goals, onDelete, onUpdate }) =>
               <React.Fragment key={log.id}>
                 {showHeader && (
                   <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm py-3 px-1 mt-4 mb-2 flex items-center gap-2">
-                    <div className="h-4 w-1 bg-indigo-500 rounded-full"></div>
+                    <div className="h-4 w-1 bg-amber-500 rounded-full"></div>
                     <span className="text-sm font-bold text-slate-700">{dateLabel}</span>
                     <div className="h-px flex-1 bg-slate-200 ml-2"></div>
                   </div>
@@ -379,7 +379,7 @@ const History: React.FC<HistoryProps> = ({ logs, goals, onDelete, onUpdate }) =>
                 setFilterGoalId('All');
                 setFilterDate('');
               }}
-              className="mt-3 text-indigo-600 text-xs font-bold hover:underline"
+              className="mt-3 text-amber-700 text-xs font-bold hover:underline"
             >
               {t('history.clear_filters')}
             </button>
@@ -454,7 +454,7 @@ const History: React.FC<HistoryProps> = ({ logs, goals, onDelete, onUpdate }) =>
                    >{t('history.btn.cancel')}</button>
                    <button 
                     onClick={handleSaveEdit}
-                    className="flex-1 px-4 py-2.5 rounded-xl bg-indigo-600 text-white font-bold shadow-lg shadow-indigo-100"
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-amber-500 text-slate-950 font-bold shadow-lg shadow-amber-200"
                    >{t('history.btn.save')}</button>
                 </div>
               </div>
@@ -512,10 +512,10 @@ const History: React.FC<HistoryProps> = ({ logs, goals, onDelete, onUpdate }) =>
                   <button 
                     onClick={handleReanalyze}
                     disabled={isReanalyzing}
-                    className="flex-1 bg-indigo-50 text-indigo-600 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all hover:bg-indigo-100 disabled:opacity-70 disabled:cursor-wait"
+                    className="flex-1 bg-amber-50 text-amber-700 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all hover:bg-amber-100 disabled:opacity-70 disabled:cursor-wait"
                   >
                     {isReanalyzing ? (
-                       <svg className="animate-spin h-5 w-5 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                       <svg className="animate-spin h-5 w-5 text-amber-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
@@ -690,7 +690,7 @@ const HistoryItem: React.FC<{
         
         <div className="flex items-center gap-3 text-xs text-slate-500 mt-2">
            <div className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-lg">
-              <svg className="w-3.5 h-3.5 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3" /></svg>
+              <svg className="w-3.5 h-3.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3" /></svg>
               <span>{log.durationMinutes} min</span>
            </div>
            
@@ -737,7 +737,7 @@ const EditInput: React.FC<{ label: string; value: string; onChange: (v: string) 
       type={type}
       value={value}
       onChange={e => onChange(e.target.value)}
-      className="w-full bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+      className="w-full bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-amber-400/30 focus:border-amber-400 outline-none transition-all"
     />
   </div>
 );
@@ -748,7 +748,7 @@ const EditSelect: React.FC<{ label: string; value: string; options: string[]; la
     <select 
       value={value}
       onChange={e => onChange(e.target.value)}
-      className="w-full bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all appearance-none"
+      className="w-full bg-slate-50 border border-slate-100 rounded-xl px-3 py-2 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-amber-400/30 focus:border-amber-400 outline-none transition-all appearance-none"
     >
       {options.map(opt => (
         <option key={opt} value={opt}>{labels ? labels[opt] : opt}</option>
@@ -759,10 +759,10 @@ const EditSelect: React.FC<{ label: string; value: string; options: string[]; la
 
 const getCategoryColor = (cat: string) => {
   switch (cat) {
-    case 'Work': return 'bg-indigo-100 text-indigo-600';
+    case 'Work': return 'bg-amber-100 text-amber-700';
     case 'Leisure': return 'bg-emerald-100 text-emerald-600';
     case 'Health': return 'bg-rose-100 text-rose-600';
-    case 'Social': return 'bg-purple-100 text-purple-600';
+    case 'Social': return 'bg-orange-100 text-orange-600';
     case 'Chores': return 'bg-amber-100 text-amber-600';
     default: return 'bg-slate-100 text-slate-600';
   }

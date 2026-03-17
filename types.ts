@@ -3,6 +3,8 @@ export type AuthStatus = 'unauthenticated' | 'guest' | 'authenticated';
 
 export type GoalType = '7_DAY' | '21_DAY';
 export type GoalStatus = 'active' | 'paused' | 'completed' | 'failed';
+export type GoalRewardRole = 'tracking' | 'primary';
+export type GoalPlanScope = 'personal' | 'official';
 
 export interface LogGoalCheckin {
   goalId: string;
@@ -14,6 +16,7 @@ export interface GoalCreateInput {
   goalType: GoalType;
   title?: string;
   rewardTitle?: string;
+  officialPlanTemplateId?: string;
 }
 
 export interface User {
@@ -37,9 +40,83 @@ export interface Goal {
   completedAt?: number | null;
   lastCheckInDate?: string | null;
   status: GoalStatus;
+  planScope: GoalPlanScope;
+  officialPlanId?: string | null;
+  rewardRole: GoalRewardRole;
+  completionPointsAwarded: number;
+  completionBadgeCode?: string | null;
+  completionBadgeTitle?: string | null;
+  completionBadgeIssuedAt?: number | null;
   metadata?: Record<string, unknown>;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface OfficialPlanTemplate {
+  id: string;
+  slug: string;
+  title: string;
+  subtitle?: string | null;
+  description?: string | null;
+  goalType: GoalType;
+  totalDays: number;
+  completionPoints: number;
+  badgeCode: string;
+  badgeTitle: string;
+  badgeShortTitle: string;
+  accentColor?: string | null;
+  isPublished: boolean;
+  displayOrder: number;
+  metadata?: Record<string, unknown>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface RewardBadge {
+  id: string;
+  goalId?: string | null;
+  badgeCode: string;
+  title: string;
+  shortTitle: string;
+  family: string;
+  status: 'active' | 'revoked';
+  issuedAt: number;
+  accentColor: string;
+  planScope: GoalPlanScope;
+  officialPlanTitle?: string | null;
+  theme?: string | null;
+  metadata?: Record<string, unknown>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface RewardLedgerEntry {
+  id: string;
+  eventType: string;
+  amount: number;
+  balanceAfter: number;
+  goalId?: string | null;
+  logId?: string | null;
+  badgeId?: string | null;
+  status: 'posted' | 'reversed' | 'pending';
+  idempotencyKey: string;
+  metadata?: Record<string, unknown>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface RewardProfile {
+  availablePoints: number;
+  lifetimePoints: number;
+  spentPoints: number;
+  level: number;
+  levelStepPoints: number;
+  currentLevelFloor: number;
+  nextLevelThreshold: number;
+  pointsIntoCurrentLevel: number;
+  pointsToNextLevel: number;
+  totalBadgeCount: number;
+  latestBadges: RewardBadge[];
 }
 
 export interface GoalCheckin {

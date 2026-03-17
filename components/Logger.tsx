@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { parseLifeLog, getSmartSuggestions } from '../services/qwenService';
 import { createFinanceRecord } from '../services/financeService';
 import { storageService } from '../services/storageService';
-import { Goal, GoalCreateInput, LogEntry } from '../types';
+import { Goal, GoalCreateInput, LogEntry, RewardProfile } from '../types';
 import GoalPlanner from './GoalPlanner';
 
 // 兼容性 UUID 生成函数
@@ -20,13 +20,43 @@ function generateUUID(): string {
   });
 }
 
+const OFFICIAL_ACCENT_COLOR_MAP: Record<string, string> = {
+  '#1d4ed8': '#f59e0b',
+  '#7c3aed': '#d97706',
+  '#059669': '#c2410c'
+};
+
+const formatDateKey = (value: number | string | Date) => {
+  const date = new Date(value);
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const normalizeOfficialAccentColor = (accentColor?: string | null) => {
+  const normalized = typeof accentColor === 'string' ? accentColor.trim().toLowerCase() : '';
+  return OFFICIAL_ACCENT_COLOR_MAP[normalized] || accentColor || '#f59e0b';
+};
+
+const getLoggerGoalAccentColor = (goal: Goal) => {
+  const metadataAccent = typeof goal.metadata?.accentColor === 'string' ? goal.metadata.accentColor : null;
+
+  if (goal.planScope === 'official') {
+    return normalizeOfficialAccentColor(metadataAccent);
+  }
+
+  return '#f59e0b';
+};
+
 interface LoggerProps {
-  onAddLog: (entry: LogEntry) => void;
+  onAddLog: (entry: LogEntry) => Promise<void>;
   onLogout: () => void;
   userId: string;
   isGuest?: boolean;
   logs: LogEntry[]; // Changed from logsCount to logs array
   goals: Goal[];
+  rewardProfile?: RewardProfile | null;
   isComposerOpen: boolean;
   isGoalActionLoading?: boolean;
   onOpenComposer: () => void;
@@ -34,6 +64,7 @@ interface LoggerProps {
   onCreateGoal: (goalInput: GoalCreateInput) => Promise<void>;
   onPauseGoal: (goalId: string) => Promise<void>;
   onResumeGoal: (goalId: string) => Promise<void>;
+  onSetPrimaryGoal: (goalId: string) => Promise<void>;
   onDeleteGoal: (goalId: string) => Promise<void>;
 }
 
@@ -44,6 +75,7 @@ const Logger: React.FC<LoggerProps> = ({
   isGuest = false,
   logs,
   goals,
+  rewardProfile,
   isComposerOpen,
   isGoalActionLoading = false,
   onOpenComposer,
@@ -51,6 +83,7 @@ const Logger: React.FC<LoggerProps> = ({
   onCreateGoal,
   onPauseGoal,
   onResumeGoal,
+  onSetPrimaryGoal,
   onDeleteGoal
 }) => {
   const { t, i18n } = useTranslation();
@@ -70,6 +103,12 @@ const Logger: React.FC<LoggerProps> = ({
   const recognitionRef = useRef<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const goalPlannerRef = useRef<HTMLDivElement>(null);
+
+  const activeGoals = goals.filter((goal) => goal.status === 'active');
+  const primaryGoal = activeGoals.find((goal) => goal.rewardRole === 'primary') || activeGoals[0] || null;
+  const focusGoal = primaryGoal || goals.find((goal) => goal.status === 'paused') || goals[0] || null;
+  const todayKey = formatDateKey(Date.now());
 
   // Fetch Smart Suggestions
   useEffect(() => {
@@ -430,7 +469,7 @@ const Logger: React.FC<LoggerProps> = ({
         images: uploadedImages
       };
 
-      onAddLog(newEntry);
+      await onAddLog(newEntry);
       setInputText('');
       setUploadedImages([]);
       setCurrentLocation(undefined);
@@ -455,29 +494,47 @@ const Logger: React.FC<LoggerProps> = ({
     onCloseComposer();
   };
 
+  const scrollToPlanner = () => {
+    goalPlannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {!isGuest && (
-        <GoalPlanner
-          goals={goals}
-          logsCount={logs.length}
-          isGoalActionLoading={isGoalActionLoading}
-          onCreateGoal={onCreateGoal}
-          onPauseGoal={onPauseGoal}
-          onResumeGoal={onResumeGoal}
-          onDeleteGoal={onDeleteGoal}
-        />
+        <>
+          <PlanFocusCard
+            goal={focusGoal}
+            activeGoalsCount={activeGoals.length}
+            rewardProfile={rewardProfile}
+            todayKey={todayKey}
+            onOpenComposer={() => handleQuickCompose()}
+            onOpenPlanner={scrollToPlanner}
+          />
+          <div ref={goalPlannerRef}>
+            <GoalPlanner
+              goals={goals}
+              logsCount={logs.length}
+              isGoalActionLoading={isGoalActionLoading}
+              onCreateGoal={onCreateGoal}
+              onPauseGoal={onPauseGoal}
+              onResumeGoal={onResumeGoal}
+              onSetPrimaryGoal={onSetPrimaryGoal}
+              onDeleteGoal={onDeleteGoal}
+            />
+          </div>
+          {rewardProfile && <RewardSnapshotCard rewardProfile={rewardProfile} />}
+        </>
       )}
       
       {suggestion && (
-        <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex items-start gap-3 relative overflow-hidden group">
-          <div className="p-2 bg-indigo-100 rounded-lg text-xl flex-none">
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3 relative overflow-hidden group">
+          <div className="p-2 bg-amber-100 rounded-lg text-xl flex-none">
             {suggestion.type === 'health' ? '🌿' : 
              suggestion.type === 'productivity' ? '🚀' : 
              suggestion.type === 'work_life_balance' ? '⚖️' : '💡'}
           </div>
           <div className="flex-1 z-10">
-            <h4 className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-0.5">{t('logger.smart_suggestion')}</h4>
+            <h4 className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-0.5">{t('logger.smart_suggestion')}</h4>
             <p className="text-sm font-medium text-slate-700 leading-snug">{suggestion.content}</p>
           </div>
           <button 
@@ -492,14 +549,14 @@ const Logger: React.FC<LoggerProps> = ({
           </button>
           
           {/* Decor background */}
-          <div className="absolute -right-4 -bottom-4 w-16 h-16 bg-white/40 rounded-full blur-xl group-hover:bg-indigo-200/20 transition-colors"></div>
+          <div className="absolute -right-4 -bottom-4 w-16 h-16 bg-white/40 rounded-full blur-xl group-hover:bg-amber-200/30 transition-colors"></div>
         </div>
       )}
 
       <div className="bg-white border border-slate-200 rounded-[2rem] p-5 shadow-sm hover:shadow-md transition-shadow">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-indigo-500">
+            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-600">
               {t('logger.launcher_label')}
             </p>
             <h3 className="mt-1 text-2xl font-black tracking-tight text-slate-900">
@@ -534,7 +591,7 @@ const Logger: React.FC<LoggerProps> = ({
             <div className="sticky top-0 bg-white/95 backdrop-blur-sm px-5 pt-5 pb-4 border-b border-slate-100 rounded-t-[2rem]">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-indigo-500">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-600">
                     {t('logger.launcher_label')}
                   </p>
                   <h3 className="mt-1 text-2xl font-black tracking-tight text-slate-900">
@@ -600,7 +657,7 @@ const Logger: React.FC<LoggerProps> = ({
                           ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-100' 
                           : permissionDenied 
                             ? 'bg-red-50 text-red-400' 
-                            : 'bg-white text-slate-500 hover:text-indigo-600 hover:bg-white shadow-sm border border-slate-100'
+                            : 'bg-white text-slate-500 hover:text-amber-700 hover:bg-white shadow-sm border border-slate-100'
                       }`}
                       title={isListening ? t('logger.stop_recording') : t('logger.voice_input')}
                     >
@@ -618,7 +675,7 @@ const Logger: React.FC<LoggerProps> = ({
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       disabled={isUploading}
-                      className={`flex-none p-2.5 rounded-xl bg-white text-slate-500 hover:text-indigo-600 shadow-sm border border-slate-100 transition-all ${isUploading ? 'animate-pulse' : ''}`}
+                      className={`flex-none p-2.5 rounded-xl bg-white text-slate-500 hover:text-amber-700 shadow-sm border border-slate-100 transition-all ${isUploading ? 'animate-pulse' : ''}`}
                       title={t('logger.upload_image')}
                     >
                       {isUploading ? (
@@ -634,7 +691,7 @@ const Logger: React.FC<LoggerProps> = ({
                       type="button"
                       onClick={captureLocation}
                       disabled={isGettingLocation}
-                      className={`flex-none p-2.5 rounded-xl transition-all shadow-sm border border-slate-100 ${currentLocation ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-white text-slate-500 hover:text-indigo-600 transition-colors'} ${isGettingLocation ? 'animate-bounce' : ''}`}
+                      className={`flex-none p-2.5 rounded-xl transition-all shadow-sm border border-slate-100 ${currentLocation ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-white text-slate-500 hover:text-amber-700 transition-colors'} ${isGettingLocation ? 'animate-bounce' : ''}`}
                       title={t('logger.capture_location')}
                     >
                       <svg className="w-5 h-5 flex-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -647,7 +704,7 @@ const Logger: React.FC<LoggerProps> = ({
                       <button
                         type="button"
                         onClick={() => setShowShareOverlay(true)}
-                        className="flex-none p-2.5 rounded-xl bg-white text-slate-500 hover:text-indigo-600 shadow-sm border border-slate-100 transition-all"
+                        className="flex-none p-2.5 rounded-xl bg-white text-slate-500 hover:text-amber-700 shadow-sm border border-slate-100 transition-all"
                         title={t('logger.share')}
                       >
                         <svg className="w-5 h-5 flex-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -677,7 +734,7 @@ const Logger: React.FC<LoggerProps> = ({
                       onClick={handleSubmit}
                       disabled={!inputText.trim() || isProcessing}
                       className={`px-6 py-3 rounded-full font-bold text-white transition-all whitespace-nowrap ${
-                        isProcessing ? 'bg-slate-400 cursor-wait' : 'bg-indigo-600 hover:bg-indigo-700 active:scale-95 shadow-lg shadow-indigo-100'
+                        isProcessing ? 'bg-slate-400 cursor-wait' : 'bg-amber-500 text-slate-950 hover:bg-amber-400 active:scale-95 shadow-lg shadow-amber-200'
                       }`}
                     >
                       {isProcessing ? t('logger.processing') : t('logger.submit')}
@@ -714,7 +771,7 @@ const Logger: React.FC<LoggerProps> = ({
           </div>
           
           <div className="text-white text-center px-10 mt-32">
-            <div className="w-20 h-20 bg-indigo-600 rounded-2xl mx-auto mb-6 shadow-2xl flex items-center justify-center">
+            <div className="w-20 h-20 bg-amber-500 text-slate-950 rounded-2xl mx-auto mb-6 shadow-2xl shadow-amber-300/30 flex items-center justify-center">
               <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
             </div>
             <h3 className="text-2xl font-bold mb-4 tracking-tight">{t('logger.share_overlay.title')}</h3>
@@ -732,7 +789,7 @@ const Logger: React.FC<LoggerProps> = ({
       {showLimitModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 text-center animate-in fade-in zoom-in duration-300">
-            <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center mx-auto mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
@@ -744,7 +801,7 @@ const Logger: React.FC<LoggerProps> = ({
             <div className="flex flex-col gap-3">
               <button
                 onClick={onLogout}
-                className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-colors"
+                className="w-full py-3 bg-amber-500 text-slate-950 rounded-xl font-bold hover:bg-amber-400 transition-colors"
               >
                 {t('common.login_register')}
               </button>
@@ -772,3 +829,318 @@ const QuickTip: React.FC<{ text: string, onClick: (t: string) => void }> = ({ te
 );
 
 export default Logger;
+
+const PlanFocusCard: React.FC<{
+  goal: Goal | null;
+  activeGoalsCount: number;
+  rewardProfile?: RewardProfile | null;
+  todayKey: string;
+  onOpenComposer: () => void;
+  onOpenPlanner: () => void;
+}> = ({ goal, activeGoalsCount, rewardProfile, todayKey, onOpenComposer, onOpenPlanner }) => {
+  const { t } = useTranslation();
+
+  if (!goal) {
+    return (
+      <div className="rounded-[2rem] border border-amber-200 bg-[linear-gradient(135deg,#fff8eb_0%,#fff1d3_55%,#fffbeb_100%)] p-5 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="max-w-xl">
+            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-600">
+              {t('logger.plan_focus_label')}
+            </p>
+            <h3 className="mt-1 text-2xl font-black tracking-tight text-slate-900">
+              {t('logger.plan_focus_empty_title')}
+            </h3>
+            <p className="mt-2 text-sm text-slate-600 leading-relaxed">
+              {t('logger.plan_focus_empty_desc')}
+            </p>
+            {rewardProfile && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                <span className="rounded-full bg-white/80 px-3 py-1.5 text-[11px] font-bold text-slate-600 border border-white shadow-sm">
+                  {t('rewards.points_value', { count: rewardProfile.availablePoints })}
+                </span>
+                <span className="rounded-full bg-white/80 px-3 py-1.5 text-[11px] font-bold text-slate-600 border border-white shadow-sm">
+                  {t('rewards.level_value', { level: rewardProfile.level })}
+                </span>
+              </div>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={onOpenPlanner}
+            className="shrink-0 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white hover:bg-slate-800 transition-colors"
+          >
+            {t('logger.plan_secondary_cta')}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const isTodayDone = goal.lastCheckInDate === todayKey;
+  const progress = Math.min((goal.completedDays / goal.totalDays) * 100, 100);
+  const remainingDays = Math.max(goal.totalDays - goal.completedDays, 0);
+  const accentColor = getLoggerGoalAccentColor(goal);
+  const streakSegmentCount = Math.min(goal.totalDays, 7);
+  const streakActiveCount = Math.min(goal.currentStreak, streakSegmentCount);
+  const streakOverflowCount = Math.max(goal.currentStreak - streakSegmentCount, 0);
+  const streakRingProgress = Math.min((goal.currentStreak / Math.max(goal.totalDays, 1)) * 100, 100);
+  const statusSummary = goal.status === 'active'
+    ? (isTodayDone ? t('goals.today_done') : t('goals.today_pending'))
+    : goal.status === 'paused'
+      ? t('goals.paused_hint')
+      : goal.status === 'completed'
+        ? t('goals.completed_hint', { days: goal.totalDays })
+        : t('goals.failed_hint');
+  const streakDashboardSummary = goal.status === 'active'
+    ? t('logger.streak_dashboard_desc_active', { count: goal.currentStreak })
+    : goal.status === 'paused'
+      ? t('logger.streak_dashboard_desc_paused', { count: goal.currentStreak })
+      : goal.status === 'completed'
+        ? t('logger.streak_dashboard_desc_completed', { count: goal.currentStreak })
+        : t('logger.streak_dashboard_desc_failed', { count: goal.currentStreak });
+
+  return (
+    <div
+      className="rounded-[2rem] border p-5 shadow-sm"
+      style={{
+        borderColor: `${accentColor}33`,
+        background: `linear-gradient(135deg, ${accentColor}26 0%, rgba(255,248,235,0.96) 48%, rgba(255,255,255,0.98) 100%)`
+      }}
+    >
+      <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-stretch xl:justify-between">
+          <div className="min-w-0 max-w-2xl">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-white/85 px-3 py-1.5 text-[11px] font-bold text-amber-700 border border-white shadow-sm">
+                {t('logger.plan_focus_label')}
+              </span>
+              <span className="rounded-full bg-slate-900 px-3 py-1.5 text-[11px] font-bold text-white">
+                {goal.planScope === 'official' ? t('goals.official_plan_badge') : t('goals.primary_badge')}
+              </span>
+              {activeGoalsCount > 1 && (
+                <span className="rounded-full bg-white/80 px-3 py-1.5 text-[11px] font-bold text-slate-600 border border-white shadow-sm">
+                  {t('logger.plan_parallel_hint', { count: activeGoalsCount })}
+                </span>
+              )}
+            </div>
+
+            <h3 className="mt-4 text-3xl font-black tracking-tight text-slate-950 leading-tight">
+              {goal.title}
+            </h3>
+
+            <p className="mt-3 text-sm text-slate-700 leading-relaxed">
+              {statusSummary}
+            </p>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <span className="rounded-full bg-white/80 px-3 py-1.5 text-[11px] font-bold text-slate-700 border border-white shadow-sm">
+                {goal.goalType === '21_DAY' ? t('goals.type_21_day') : t('goals.type_7_day')}
+              </span>
+              {goal.rewardTitle && (
+                <span className="rounded-full bg-white/80 px-3 py-1.5 text-[11px] font-bold text-slate-700 border border-white shadow-sm">
+                  {t('goals.reward_inline', { reward: goal.rewardTitle })}
+                </span>
+              )}
+              {rewardProfile && (
+                <span className="rounded-full bg-white/80 px-3 py-1.5 text-[11px] font-bold text-slate-700 border border-white shadow-sm">
+                  {t('rewards.points_value', { count: rewardProfile.availablePoints })}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="xl:w-[320px] shrink-0 rounded-[1.6rem] bg-slate-950 px-4 py-4 text-white shadow-sm">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-200">
+              {t('logger.streak_dashboard_label')}
+            </p>
+
+            <div className="mt-4 flex items-center gap-4">
+              <div
+                className="relative h-24 w-24 shrink-0 rounded-full"
+                style={{
+                  background: `conic-gradient(${accentColor} 0% ${streakRingProgress}%, rgba(255,255,255,0.12) ${streakRingProgress}% 100%)`
+                }}
+              >
+                <div className="absolute inset-[7px] rounded-full bg-slate-950"></div>
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                  <span className="text-lg leading-none">🔥</span>
+                  <span className="mt-1 text-3xl font-black text-white">{goal.currentStreak}</span>
+                </div>
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-white">
+                  {t('goals.streak_label')}
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-300">
+                  {streakDashboardSummary}
+                </p>
+                <div className="mt-3 flex items-center gap-2">
+                  <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${isTodayDone ? 'bg-emerald-400/15 text-emerald-200' : 'bg-amber-400/15 text-amber-100'}`}>
+                    {isTodayDone ? t('goals.today_short_done') : t('goals.today_short_pending')}
+                  </span>
+                  <span className="text-[10px] font-bold text-slate-400">
+                    {t('logger.streak_today_status_label')}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-2xl bg-white/6 px-3 py-3 border border-white/10">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[11px] font-bold text-slate-300">
+                  {t('logger.streak_momentum_label')}
+                </span>
+                {streakOverflowCount > 0 && (
+                  <span className="rounded-full bg-white/8 px-2.5 py-1 text-[10px] font-bold text-amber-100">
+                    {t('logger.streak_overflow_days', { count: streakOverflowCount })}
+                  </span>
+                )}
+              </div>
+
+              <div className="mt-3 grid grid-cols-7 gap-1.5">
+                {Array.from({ length: streakSegmentCount }).map((_, index) => {
+                  const isActive = index < streakActiveCount;
+                  const isCurrentEdge = isActive && index === streakActiveCount - 1;
+
+                  return (
+                    <div
+                      key={index}
+                      className={`h-2.5 rounded-full transition-all ${isCurrentEdge ? 'scale-y-125' : ''}`}
+                      style={{
+                        background: isActive
+                          ? `linear-gradient(90deg, ${accentColor} 0%, #fbbf24 100%)`
+                          : 'rgba(255,255,255,0.12)',
+                        boxShadow: isCurrentEdge ? `0 0 0 1px ${accentColor}66` : 'none'
+                      }}
+                    ></div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="mt-4 flex gap-3">
+              <button
+                type="button"
+                onClick={goal.status === 'active' ? onOpenComposer : onOpenPlanner}
+                className="flex-1 rounded-2xl bg-amber-400 px-4 py-3 text-sm font-bold text-slate-950 hover:bg-amber-300 transition-colors"
+              >
+                {goal.status === 'active' ? t('logger.plan_primary_cta') : t('logger.plan_secondary_cta')}
+              </button>
+              {goal.status === 'active' && (
+                <button
+                  type="button"
+                  onClick={onOpenPlanner}
+                  className="rounded-2xl bg-white/10 px-4 py-3 text-sm font-bold text-white border border-white/10 hover:bg-white/15 transition-colors"
+                >
+                  {t('logger.plan_secondary_cta')}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-[1.5rem] bg-white/85 border border-white px-4 py-4 shadow-sm">
+          <div className="flex items-center justify-between gap-3 text-[11px] font-bold text-slate-500">
+            <span>{t('goals.progress_inline', { current: goal.completedDays, total: goal.totalDays })}</span>
+            <span>{t('goals.remaining_label')} {remainingDays}</span>
+          </div>
+          <div className="mt-3 h-2 rounded-full bg-slate-200 overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{ width: `${progress}%`, backgroundColor: accentColor }}
+            ></div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-3 gap-3">
+            <PlanStat label={t('goals.progress_label')} value={`${goal.completedDays}/${goal.totalDays}`} />
+            <PlanStat label={t('goals.streak_label')} value={`${goal.currentStreak}`} />
+            <PlanStat label={t('goals.today_label')} value={isTodayDone ? t('goals.today_short_done') : t('goals.today_short_pending')} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const PlanStat: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+  <div className="rounded-2xl bg-slate-50 px-3 py-3 text-center border border-slate-100">
+    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{label}</p>
+    <p className="mt-1 text-lg font-black text-slate-900">{value}</p>
+  </div>
+);
+
+const RewardSnapshotCard: React.FC<{ rewardProfile: RewardProfile }> = ({ rewardProfile }) => {
+  const { t, i18n } = useTranslation();
+  const latestBadge = rewardProfile.latestBadges[0] || null;
+  const latestBadgeAccent = latestBadge?.accentColor || '#f59e0b';
+  const levelProgress = Math.min((rewardProfile.pointsIntoCurrentLevel / rewardProfile.levelStepPoints) * 100, 100);
+  const badgeDate = latestBadge
+    ? new Date(latestBadge.issuedAt).toLocaleDateString(i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US', {
+      month: 'short',
+      day: 'numeric'
+    })
+    : null;
+
+  return (
+    <div className="rounded-[1.6rem] border border-amber-200 bg-[linear-gradient(135deg,#fffaf0_0%,#fff6e5_58%,#ffffff_100%)] p-4 shadow-sm">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-600">
+            {t('logger.reward_summary_label')}
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className="rounded-full bg-white px-3 py-1.5 text-[11px] font-bold text-slate-700 border border-amber-100 shadow-sm">
+              {t('rewards.points_value', { count: rewardProfile.availablePoints })}
+            </span>
+            <span className="rounded-full bg-white px-3 py-1.5 text-[11px] font-bold text-slate-700 border border-amber-100 shadow-sm">
+              {t('rewards.level_value', { level: rewardProfile.level })}
+            </span>
+            <span className="rounded-full bg-white px-3 py-1.5 text-[11px] font-bold text-slate-700 border border-amber-100 shadow-sm">
+              {t('rewards.badge_count_label')} {rewardProfile.totalBadgeCount}
+            </span>
+          </div>
+        </div>
+
+        <div className="min-w-0 lg:w-[280px] rounded-2xl bg-white/85 border border-white px-4 py-3 shadow-sm">
+          <div className="flex items-center justify-between gap-3 text-[11px] font-bold text-slate-500">
+            <span>{t('rewards.level_progress_value', { current: rewardProfile.pointsIntoCurrentLevel, total: rewardProfile.levelStepPoints })}</span>
+            <span>{t('rewards.next_level_remaining', { level: rewardProfile.level + 1, count: rewardProfile.pointsToNextLevel })}</span>
+          </div>
+          <div className="mt-3 h-2 rounded-full bg-slate-200 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-[linear-gradient(90deg,#fbbf24_0%,#f59e0b_100%)] transition-all duration-500"
+              style={{ width: `${levelProgress}%` }}
+            ></div>
+          </div>
+        </div>
+      </div>
+
+      {latestBadge && (
+        <div className="mt-4 rounded-2xl px-4 py-3 text-white" style={{ background: `linear-gradient(135deg, ${latestBadgeAccent} 0%, rgba(15,23,42,0.9) 100%)` }}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-amber-100">{t('rewards.latest_badge_label')}</p>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <p className="text-sm font-black text-white truncate">{latestBadge.title}</p>
+                <span className="rounded-full bg-white/10 px-2.5 py-1 text-[10px] font-bold text-white/90">
+                  {latestBadge.planScope === 'official' ? t('rewards.official_badge') : t('rewards.personal_badge')}
+                </span>
+              </div>
+              {badgeDate && (
+                <p className="mt-1 text-xs text-white/75">
+                  {t('rewards.badge_earned_at', { date: badgeDate })}
+                </p>
+              )}
+            </div>
+            <span className="shrink-0 rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold text-white">
+              {latestBadge.shortTitle}
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

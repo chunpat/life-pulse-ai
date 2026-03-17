@@ -39,6 +39,8 @@ const logRoutes = require('./routes/logs');
 const aiRoutes = require('./routes/ai');
 const financeRoutes = require('./routes/finance');
 const goalRoutes = require('./routes/goals');
+const officialPlanRoutes = require('./routes/officialPlans');
+const rewardRoutes = require('./routes/rewards');
 const uploadRoutes = require('./routes/upload');
 const wechatRoutes = require('./routes/wechat');
 app.use('/api/auth', authRoutes);
@@ -46,6 +48,8 @@ app.use('/api/logs', logRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/finance', financeRoutes);
 app.use('/api/goals', goalRoutes);
+app.use('/api/official-plans', officialPlanRoutes);
+app.use('/api/rewards', rewardRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/wechat', wechatRoutes);
 
@@ -61,9 +65,15 @@ const Log = require('./models/Log');
 const FinanceRecord = require('./models/FinanceRecord');
 const Goal = require('./models/Goal');
 const GoalCheckin = require('./models/GoalCheckin');
+const OfficialPlanTemplate = require('./models/OfficialPlanTemplate');
+const RewardProfile = require('./models/RewardProfile');
+const RewardLedger = require('./models/RewardLedger');
+const UserBadge = require('./models/UserBadge');
+const { ensureOfficialPlanTemplates } = require('./services/officialPlanService');
 
 sequelize.sync({ alter: true })
-  .then(() => {
+  .then(async () => {
+    await ensureOfficialPlanTemplates();
     console.log('Database connected and synced');
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server is running on http://0.0.0.0:${PORT}`);

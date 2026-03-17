@@ -10,7 +10,7 @@ interface FinanceProps {
 
 type FilterType = 'WEEK' | 'MONTH' | 'ALL';
 
-const COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#f43f5e'];
+const COLORS = ['#f59e0b', '#ea580c', '#14b8a6', '#10b981', '#ef4444', '#84cc16', '#64748b'];
 
 const Finance: React.FC<FinanceProps> = ({ userId }) => {
   const { t } = useTranslation();
@@ -89,7 +89,7 @@ const Finance: React.FC<FinanceProps> = ({ userId }) => {
   if (loading && records.length === 0) {
       return (
           <div className="flex flex-col items-center justify-center p-20 space-y-4">
-              <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+              <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
               <p className="text-xs font-bold text-slate-400">{t('finance.loading')}</p>
           </div>
       );
@@ -105,7 +105,7 @@ const Finance: React.FC<FinanceProps> = ({ userId }) => {
                         key={tType}
                         onClick={() => setFilter(tType)}
                         className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
-                            filter === tType ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'
+                            filter === tType ? 'bg-white text-amber-700 shadow-sm' : 'text-slate-400'
                         }`}
                     >
                         {tType === 'WEEK' ? t('finance.filter.week') : tType === 'MONTH' ? t('finance.filter.month') : t('finance.filter.all')}

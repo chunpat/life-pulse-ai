@@ -49,7 +49,7 @@ export const Layout: React.FC<LayoutProps> = ({
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-xl font-black text-slate-800 tracking-tighter">
-                {t('app.title')} <span className="text-indigo-500">AI</span>
+                {t('app.title')} <span className="text-amber-600">AI</span>
               </h1>
               <p className="text-[10px] text-slate-400 font-bold tracking-wide mt-0.5">
                 {t('common.hello')}, {displayUserName}
@@ -63,7 +63,7 @@ export const Layout: React.FC<LayoutProps> = ({
                   onViewChange(ViewMode.FINANCE);
                   setIsMenuOpen(false);
                 }}
-                className={`p-2 rounded-full transition-colors ${currentView === ViewMode.FINANCE ? 'bg-indigo-100 text-indigo-600' : 'hover:bg-slate-100 text-slate-400'}`}
+                className={`p-2 rounded-full transition-colors ${currentView === ViewMode.FINANCE ? 'bg-amber-100 text-amber-700' : 'hover:bg-slate-100 text-slate-400'}`}
                 title={t('nav.finance')}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
@@ -72,7 +72,7 @@ export const Layout: React.FC<LayoutProps> = ({
               <div className="relative">
                 <button 
                   onClick={() => setIsMenuOpen(!isMenuOpen)}
-                  className={`p-2 rounded-full transition-colors ${isMenuOpen ? 'bg-indigo-50 text-indigo-600' : 'hover:bg-slate-100 text-slate-400'}`}
+                  className={`p-2 rounded-full transition-colors ${isMenuOpen ? 'bg-amber-50 text-amber-700' : 'hover:bg-slate-100 text-slate-400'}`}
                   title={t('nav.profile_menu')}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
@@ -91,13 +91,13 @@ export const Layout: React.FC<LayoutProps> = ({
                       <div className="px-4 py-2 border-b border-slate-50 flex gap-2 justify-center">
                         <button 
                           onClick={() => i18n.changeLanguage('zh')}
-                          className={`flex-1 text-xs py-1 rounded ${i18n.language.startsWith('zh') ? 'bg-indigo-100 text-indigo-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}
+                          className={`flex-1 text-xs py-1 rounded ${i18n.language.startsWith('zh') ? 'bg-amber-100 text-amber-800 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}
                         >
                           中文
                         </button>
                         <button 
                           onClick={() => i18n.changeLanguage('en')}
-                          className={`flex-1 text-xs py-1 rounded ${i18n.language.startsWith('en') ? 'bg-indigo-100 text-indigo-700 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}
+                          className={`flex-1 text-xs py-1 rounded ${i18n.language.startsWith('en') ? 'bg-amber-100 text-amber-800 font-bold' : 'text-slate-500 hover:bg-slate-100'}`}
                         >
                           EN
                         </button>
@@ -109,7 +109,7 @@ export const Layout: React.FC<LayoutProps> = ({
                             setIsMenuOpen(false);
                             onShowInvite();
                           }}
-                          className="w-full text-left px-4 py-2 text-sm text-indigo-600 hover:bg-indigo-50 font-bold transition-colors flex items-center gap-2"
+                          className="w-full text-left px-4 py-2 text-sm text-amber-700 hover:bg-amber-50 font-bold transition-colors flex items-center gap-2"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
                           {t('invite.menu_btn', 'Invite Friends')}
@@ -159,10 +159,10 @@ export const Layout: React.FC<LayoutProps> = ({
               title={t('nav.logger')}
               className={`
                 w-14 h-14 rounded-full flex items-center justify-center 
-                shadow-xl shadow-indigo-500/30 border-4 border-slate-50 
+                shadow-xl shadow-amber-300/40 border-4 border-slate-50 
                 transition-all duration-300 ease-out transform
                 ${currentView === ViewMode.LOGGER 
-                  ? 'bg-indigo-600 scale-110 rotate-90 text-white' 
+                  ? 'bg-amber-500 scale-110 rotate-90 text-slate-950' 
                   : 'bg-slate-900 hover:bg-slate-800 text-white hover:-translate-y-1'}
               `}
             >
@@ -201,7 +201,7 @@ const NavButton: React.FC<{ id?: string; active: boolean; onClick: () => void; c
     id={id}
     onClick={onClick}
     className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-all duration-300 ${
-      active ? 'text-indigo-600 bg-indigo-50/50 scale-105' : 'text-slate-400 hover:text-slate-600'
+      active ? 'text-amber-700 bg-amber-50/80 scale-105' : 'text-slate-400 hover:text-slate-600'
     }`}
   >
     {children}

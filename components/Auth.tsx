@@ -71,13 +71,13 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onContinueAsGuest }) => {
       <div className="absolute top-6 right-6 flex gap-2">
         <button 
           onClick={() => i18n.changeLanguage('zh')}
-          className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${i18n.language.startsWith('zh') ? 'bg-white text-indigo-600 shadow-sm border border-indigo-100' : 'text-slate-400 hover:text-slate-600'}`}
+          className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${i18n.language.startsWith('zh') ? 'bg-white text-amber-700 shadow-sm border border-amber-200' : 'text-slate-400 hover:text-slate-600'}`}
         >
           中文
         </button>
         <button 
           onClick={() => i18n.changeLanguage('en')}
-          className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${i18n.language.startsWith('en') ? 'bg-white text-indigo-600 shadow-sm border border-indigo-100' : 'text-slate-400 hover:text-slate-600'}`}
+          className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${i18n.language.startsWith('en') ? 'bg-white text-amber-700 shadow-sm border border-amber-200' : 'text-slate-400 hover:text-slate-600'}`}
         >
           EN
         </button>
@@ -86,13 +86,13 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onContinueAsGuest }) => {
       <div className="w-full max-w-md space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
         {/* Logo/Header */}
         <div className="text-center">
-          <div className="w-20 h-20 bg-indigo-600 rounded-3xl shadow-xl shadow-indigo-200 flex items-center justify-center mx-auto mb-6 transform rotate-12 transition-transform hover:rotate-6">
-            <svg className="w-10 h-10 text-white -rotate-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="w-20 h-20 bg-amber-500 rounded-3xl shadow-xl shadow-amber-200 flex items-center justify-center mx-auto mb-6 transform rotate-12 transition-transform hover:rotate-6">
+            <svg className="w-10 h-10 text-slate-950 -rotate-12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
           </div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">
-            {t('app.title')} <span className="text-indigo-500">AI</span>
+            {t('app.title')} <span className="text-amber-600">AI</span>
           </h1>
           <p className="mt-2 text-slate-500 font-medium">{t('auth.subtitle')}</p>
         </div>
@@ -115,7 +115,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onContinueAsGuest }) => {
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500/20 transition-all outline-none text-slate-800"
+                  className="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-amber-400/30 transition-all outline-none text-slate-800"
                   placeholder={isLoginView ? t('auth.login_identifier_placeholder') : t('auth.nickname_placeholder')}
                 />
               </div>
@@ -132,7 +132,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onContinueAsGuest }) => {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500/20 transition-all outline-none text-slate-800"
+                    className="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-amber-400/30 transition-all outline-none text-slate-800"
                     placeholder="hello@example.com"
                   />
                   <p className="mt-1 text-xs text-slate-400 px-1">{t('auth.email_hint')}</p>
@@ -147,7 +147,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onContinueAsGuest }) => {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500/20 transition-all outline-none text-slate-800"
+                className="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-amber-400/30 transition-all outline-none text-slate-800"
                 placeholder={t('auth.password_placeholder')}
               />
             </div>
@@ -155,7 +155,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onContinueAsGuest }) => {
             <button
               type="submit"
               disabled={loading}
-              className={`w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 active:scale-[0.98] transition-all ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
+              className={`w-full py-4 bg-amber-500 text-slate-950 rounded-2xl font-bold shadow-lg shadow-amber-200 hover:bg-amber-400 active:scale-[0.98] transition-all ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
             >
               {loading ? (
                 <div className="flex items-center justify-center gap-2">
@@ -169,7 +169,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onContinueAsGuest }) => {
           <div className="mt-6 flex items-center justify-between text-sm">
             <button 
               onClick={() => setIsLoginView(!isLoginView)}
-              className="text-indigo-600 font-bold hover:underline"
+              className="text-amber-700 font-bold hover:underline"
             >
               {isLoginView ? t('auth.switch_to_register') : t('auth.switch_to_login')}
             </button>
@@ -187,7 +187,7 @@ const Auth: React.FC<AuthProps> = ({ onLogin, onContinueAsGuest }) => {
 
           <button 
             onClick={onContinueAsGuest}
-            className="group w-full py-4 bg-white border-2 border-slate-200 text-slate-600 rounded-2xl font-bold hover:border-indigo-500 hover:text-indigo-600 transition-all flex items-center justify-center gap-2"
+            className="group w-full py-4 bg-white border-2 border-slate-200 text-slate-600 rounded-2xl font-bold hover:border-amber-400 hover:text-amber-700 transition-all flex items-center justify-center gap-2"
           >
             <span>{t('auth.guest_mode')}</span>
             <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">

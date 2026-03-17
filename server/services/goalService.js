@@ -1,6 +1,7 @@
 const { Op } = require('sequelize');
 const Goal = require('../models/Goal');
 const GoalCheckin = require('../models/GoalCheckin');
+const { getOfficialPlanTemplateById } = require('./officialPlanService');
 
 const GOAL_CONFIG = {
   '7_DAY': {
@@ -14,6 +15,8 @@ const GOAL_CONFIG = {
 };
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
+
+const getTransactionOptions = (options = {}) => (options.transaction ? { transaction: options.transaction } : {});
 
 const formatDateKey = (value) => {
   const date = value instanceof Date ? value : new Date(value);
@@ -48,12 +51,66 @@ const getCurrentMonthRange = () => {
   return { start, end };
 };
 
-const refreshSingleActiveGoal = async (goal, todayKey) => {
+const selectPrimaryRewardGoal = (activeGoals, preferredGoalId = null) => {
+  if (!activeGoals.length) {
+    return null;
+  }
+
+  const preferredGoal = preferredGoalId
+    ? activeGoals.find(goal => goal.id === preferredGoalId)
+    : null;
+  const activeOfficialGoals = activeGoals.filter(goal => goal.planScope === 'official');
+
+  if (activeOfficialGoals.length) {
+    if (preferredGoal && preferredGoal.planScope === 'official') {
+      return preferredGoal;
+    }
+
+    return activeOfficialGoals.find(goal => goal.rewardRole === 'primary') || activeOfficialGoals[0];
+  }
+
+  return preferredGoal || activeGoals.find(goal => goal.rewardRole === 'primary') || activeGoals[0];
+};
+
+const ensurePrimaryRewardGoal = async (userId, preferredGoalId = null, options = {}) => {
+  const txOptions = getTransactionOptions(options);
+  const activeGoals = await Goal.findAll({
+    where: { userId, status: 'active' },
+    order: [['createdAt', 'DESC']],
+    ...txOptions
+  });
+
+  if (!activeGoals.length) {
+    await Goal.update({ rewardRole: 'tracking' }, {
+      where: { userId, rewardRole: 'primary' },
+      ...txOptions
+    });
+    return null;
+  }
+
+  const targetGoal = selectPrimaryRewardGoal(activeGoals, preferredGoalId);
+
+  await Goal.update({ rewardRole: 'tracking' }, {
+    where: { userId, rewardRole: 'primary' },
+    ...txOptions
+  });
+
+  await Goal.update({ rewardRole: 'primary' }, {
+    where: { id: targetGoal.id, userId },
+    ...txOptions
+  });
+
+  return targetGoal;
+};
+
+const refreshSingleActiveGoal = async (goal, todayKey, options = {}) => {
+  const txOptions = getTransactionOptions(options);
+
   if (goal.completedDays >= goal.totalDays) {
     await goal.update({
       status: 'completed',
       completedAt: goal.completedAt || Date.now()
-    });
+    }, txOptions);
     return null;
   }
 
@@ -66,64 +123,128 @@ const refreshSingleActiveGoal = async (goal, todayKey) => {
     await goal.update({
       status: 'failed',
       currentStreak: 0
-    });
+    }, txOptions);
     return null;
   }
 
   return goal;
 };
 
-const refreshActiveGoals = async (userId) => {
+const refreshActiveGoals = async (userId, options = {}) => {
+  const txOptions = getTransactionOptions(options);
   const activeGoals = await Goal.findAll({
     where: { userId, status: 'active' },
-    order: [['createdAt', 'DESC']]
+    order: [['createdAt', 'DESC']],
+    ...txOptions
   });
 
   if (!activeGoals.length) {
+    await ensurePrimaryRewardGoal(userId, null, options);
     return [];
   }
 
-  const todayKey = formatDateKey(Date.now());
-  const refreshedGoals = [];
+  const todayKey = formatDateKey(options.settlementTimestamp || Date.now());
 
   for (const goal of activeGoals) {
-    const refreshedGoal = await refreshSingleActiveGoal(goal, todayKey);
-    if (refreshedGoal) {
-      refreshedGoals.push(refreshedGoal);
-    }
+    await refreshSingleActiveGoal(goal, todayKey, options);
   }
 
-  return refreshedGoals;
-};
-
-const listGoals = async (userId) => {
-  await refreshActiveGoals(userId);
+  await ensurePrimaryRewardGoal(userId, null, options);
 
   return Goal.findAll({
-    where: { userId },
-    order: [['createdAt', 'DESC']]
+    where: { userId, status: 'active' },
+    order: [['createdAt', 'DESC']],
+    ...txOptions
   });
 };
 
-const getActiveGoals = async (userId) => refreshActiveGoals(userId);
+const listGoals = async (userId, options = {}) => {
+  const txOptions = getTransactionOptions(options);
+  await refreshActiveGoals(userId, options);
 
-const getActiveGoal = async (userId) => {
-  const goals = await refreshActiveGoals(userId);
+  return Goal.findAll({
+    where: { userId },
+    order: [['createdAt', 'DESC']],
+    ...txOptions
+  });
+};
+
+const getActiveGoals = async (userId, options = {}) => refreshActiveGoals(userId, options);
+
+const getActiveGoal = async (userId, options = {}) => {
+  const goals = await refreshActiveGoals(userId, options);
   return goals[0] || null;
 };
 
-const createGoalForUser = async (userId, goalInput) => {
+const createGoalForUser = async (userId, goalInput, options = {}) => {
+  const txOptions = getTransactionOptions(options);
   const goalType = typeof goalInput === 'string' ? goalInput : goalInput?.goalType;
+  const officialPlanTemplateId = typeof goalInput === 'object' ? goalInput?.officialPlanTemplateId : null;
   const config = GOAL_CONFIG[goalType];
 
-  if (!config) {
+  if (!config && !officialPlanTemplateId) {
     throw new Error('不支持的目标类型');
   }
 
-  const title = sanitizeText(goalInput?.title) || config.title;
+  const title = sanitizeText(goalInput?.title) || config?.title;
   const rewardTitle = sanitizeText(goalInput?.rewardTitle, 80);
 
-  await refreshActiveGoals(userId);
+  await refreshActiveGoals(userId, options);
+
+  if (officialPlanTemplateId) {
+    const officialPlan = await getOfficialPlanTemplateById(officialPlanTemplateId, options);
+
+    if (!officialPlan) {
+      throw new Error('官方计划不存在');
+    }
+
+    const existingOfficialGoal = await Goal.findOne({
+      where: {
+        userId,
+        officialPlanId: officialPlan.id,
+        status: { [Op.in]: ['active', 'paused'] }
+      },
+      ...txOptions
+    });
+
+    if (existingOfficialGoal) {
+      throw new Error('该官方计划已在进行中');
+    }
+
+    await Goal.update({ rewardRole: 'tracking' }, {
+      where: {
+        userId,
+        status: 'active'
+      },
+      ...txOptions
+    });
+
+    return Goal.create({
+      userId,
+      title: officialPlan.title,
+      rewardTitle: officialPlan.badgeTitle,
+      goalType: officialPlan.goalType,
+      totalDays: officialPlan.totalDays,
+      startedAt: Date.now(),
+      planScope: 'official',
+      officialPlanId: officialPlan.id,
+      rewardRole: 'primary',
+      metadata: {
+        source: 'official-plan',
+        officialPlanSlug: officialPlan.slug,
+        officialPlanBadgeCode: officialPlan.badgeCode,
+        officialPlanTitle: officialPlan.title,
+        officialPlanBadgeShortTitle: officialPlan.badgeShortTitle,
+        accentColor: officialPlan.accentColor,
+        theme: officialPlan.metadata?.theme || null
+      }
+    }, txOptions);
+  }
+
+  const activePrimaryGoal = await Goal.findOne({
+    where: { userId, status: 'active', rewardRole: 'primary' },
+    ...txOptions
+  });
 
   return Goal.create({
     userId,
@@ -132,14 +253,17 @@ const createGoalForUser = async (userId, goalInput) => {
     goalType,
     totalDays: config.totalDays,
     startedAt: Date.now(),
+    planScope: 'personal',
+    rewardRole: activePrimaryGoal ? 'tracking' : 'primary',
     metadata: {
       source: 'quick-start'
     }
-  });
+  }, txOptions);
 };
 
-const pauseGoal = async (userId, goalId) => {
-  const goal = await Goal.findOne({ where: { id: goalId, userId } });
+const pauseGoal = async (userId, goalId, options = {}) => {
+  const txOptions = getTransactionOptions(options);
+  const goal = await Goal.findOne({ where: { id: goalId, userId }, ...txOptions });
 
   if (!goal) {
     throw new Error('目标不存在');
@@ -157,13 +281,16 @@ const pauseGoal = async (userId, goalId) => {
       pausedAt: Date.now(),
       pauseCount
     })
-  });
+  }, txOptions);
 
-  return goal;
+  await ensurePrimaryRewardGoal(userId, null, options);
+
+  return Goal.findOne({ where: { id: goalId, userId }, ...txOptions });
 };
 
-const resumeGoal = async (userId, goalId) => {
-  const goal = await Goal.findOne({ where: { id: goalId, userId } });
+const resumeGoal = async (userId, goalId, options = {}) => {
+  const txOptions = getTransactionOptions(options);
+  const goal = await Goal.findOne({ where: { id: goalId, userId }, ...txOptions });
 
   if (!goal) {
     throw new Error('目标不存在');
@@ -185,28 +312,42 @@ const resumeGoal = async (userId, goalId) => {
       resumedAt: Date.now(),
       resumeCount
     })
-  });
+  }, txOptions);
 
-  return goal;
+  await ensurePrimaryRewardGoal(userId, null, options);
+
+  return Goal.findOne({ where: { id: goalId, userId }, ...txOptions });
 };
 
-const completeGoal = async (userId, goalId) => {
-  const goal = await Goal.findOne({ where: { id: goalId, userId } });
+const completeGoal = async (userId, goalId, options = {}) => {
+  const txOptions = getTransactionOptions(options);
+  const goal = await Goal.findOne({ where: { id: goalId, userId }, ...txOptions });
 
   if (!goal) {
     throw new Error('目标不存在');
   }
 
+  if (goal.status === 'completed') {
+    return goal;
+  }
+
+  if (goal.completedDays < goal.totalDays) {
+    throw new Error('计划尚未完成，不能手动结束');
+  }
+
   await goal.update({
     status: 'completed',
     completedAt: Date.now()
-  });
+  }, txOptions);
 
-  return goal;
+  await ensurePrimaryRewardGoal(userId, null, options);
+
+  return Goal.findOne({ where: { id: goalId, userId }, ...txOptions });
 };
 
-const deleteGoal = async (userId, goalId) => {
-  const goal = await Goal.findOne({ where: { id: goalId, userId } });
+const deleteGoal = async (userId, goalId, options = {}) => {
+  const txOptions = getTransactionOptions(options);
+  const goal = await Goal.findOne({ where: { id: goalId, userId }, ...txOptions });
 
   if (!goal) {
     throw new Error('目标不存在');
@@ -226,7 +367,8 @@ const deleteGoal = async (userId, goalId) => {
           { lastCheckInDate: { [Op.ne]: null } }
         ]
       },
-      paranoid: false
+      paranoid: false,
+      ...txOptions
     });
 
     if (deletedStartedGoalCount >= 1) {
@@ -234,12 +376,44 @@ const deleteGoal = async (userId, goalId) => {
     }
   }
 
-  await goal.destroy();
+  await goal.destroy(txOptions);
+  await ensurePrimaryRewardGoal(userId, null, options);
   return goal;
 };
 
-const getGoalCheckins = async (userId, goalId) => {
-  const goal = await Goal.findOne({ where: { id: goalId, userId } });
+const setPrimaryGoal = async (userId, goalId, options = {}) => {
+  const txOptions = getTransactionOptions(options);
+  const goal = await Goal.findOne({ where: { id: goalId, userId }, ...txOptions });
+
+  if (!goal) {
+    throw new Error('目标不存在');
+  }
+
+  if (goal.status !== 'active') {
+    throw new Error('只有进行中的计划才能设为主奖励计划');
+  }
+
+  const activeOfficialGoal = await Goal.findOne({
+    where: {
+      userId,
+      status: 'active',
+      planScope: 'official',
+      id: { [Op.ne]: goalId }
+    },
+    ...txOptions
+  });
+
+  if (activeOfficialGoal && goal.planScope !== 'official') {
+    throw new Error('有官方计划进行中时，不能将个人计划设为主奖励计划');
+  }
+
+  await ensurePrimaryRewardGoal(userId, goal.id, options);
+  return Goal.findOne({ where: { id: goalId, userId }, ...txOptions });
+};
+
+const getGoalCheckins = async (userId, goalId, options = {}) => {
+  const txOptions = getTransactionOptions(options);
+  const goal = await Goal.findOne({ where: { id: goalId, userId }, ...txOptions });
 
   if (!goal) {
     throw new Error('目标不存在');
@@ -247,7 +421,8 @@ const getGoalCheckins = async (userId, goalId) => {
 
   const checkins = await GoalCheckin.findAll({
     where: { goalId, userId },
-    order: [['dateKey', 'ASC']]
+    order: [['dateKey', 'ASC']],
+    ...txOptions
   });
 
   return {
@@ -256,18 +431,20 @@ const getGoalCheckins = async (userId, goalId) => {
   };
 };
 
-const applyLogGoalCheckin = async (userId, logData) => {
-  const activeGoals = await refreshActiveGoals(userId);
+const applyLogGoalCheckin = async (userId, logData, options = {}) => {
+  const txOptions = getTransactionOptions(options);
+  const activeGoals = await refreshActiveGoals(userId, options);
 
   if (!activeGoals.length) {
     return {
       goals: [],
       checkins: [],
+      goalEvents: [],
       logData
     };
   }
 
-  const dateKey = formatDateKey(logData.timestamp || Date.now());
+  const dateKey = formatDateKey(options.settlementTimestamp || Date.now());
   const createdGoalCheckins = [];
 
   for (const activeGoal of activeGoals) {
@@ -280,7 +457,8 @@ const applyLogGoalCheckin = async (userId, logData) => {
         goalId: activeGoal.id,
         userId,
         dateKey
-      }
+      },
+      ...txOptions
     });
 
     if (existingCheckin) {
@@ -298,9 +476,10 @@ const applyLogGoalCheckin = async (userId, logData) => {
       logId: logData.id,
       dateKey,
       dayNumber: nextCompletedDays
-    });
+    }, txOptions);
 
     const nextStatus = nextCompletedDays >= activeGoal.totalDays ? 'completed' : 'active';
+    const completedNow = nextStatus === 'completed' && activeGoal.status !== 'completed';
 
     await activeGoal.update({
       completedDays: nextCompletedDays,
@@ -308,11 +487,12 @@ const applyLogGoalCheckin = async (userId, logData) => {
       lastCheckInDate: dateKey,
       status: nextStatus,
       completedAt: nextStatus === 'completed' ? Date.now() : null
-    });
+    }, txOptions);
 
     createdGoalCheckins.push({
       checkin,
       goal: activeGoal,
+      completedNow,
       summary: {
         goalId: activeGoal.id,
         goalLabel: activeGoal.title,
@@ -325,15 +505,23 @@ const applyLogGoalCheckin = async (userId, logData) => {
     return {
       goals: activeGoals,
       checkins: [],
+      goalEvents: [],
       logData
     };
   }
 
-  const primaryGoalCheckin = createdGoalCheckins[0].summary;
+  await ensurePrimaryRewardGoal(userId, null, options);
+
+  const primaryGoalCheckin = createdGoalCheckins.find(item => item.goal.rewardRole === 'primary')?.summary || createdGoalCheckins[0].summary;
 
   return {
     goals: createdGoalCheckins.map(item => item.goal),
     checkins: createdGoalCheckins.map(item => item.checkin),
+    goalEvents: createdGoalCheckins.map(item => ({
+      goal: item.goal,
+      summary: item.summary,
+      completedNow: item.completedNow
+    })),
     logData: {
       ...logData,
       goalId: primaryGoalCheckin.goalId,
@@ -358,5 +546,6 @@ module.exports = {
   listGoals,
   pauseGoal,
   refreshActiveGoals,
-  resumeGoal
+  resumeGoal,
+  setPrimaryGoal
 };

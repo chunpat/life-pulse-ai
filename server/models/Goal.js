@@ -54,6 +54,37 @@ const Goal = sequelize.define('Goal', {
     allowNull: false,
     defaultValue: 'active'
   },
+  planScope: {
+    type: DataTypes.ENUM('personal', 'official'),
+    allowNull: false,
+    defaultValue: 'personal'
+  },
+  officialPlanId: {
+    type: DataTypes.UUID,
+    allowNull: true
+  },
+  rewardRole: {
+    type: DataTypes.ENUM('tracking', 'primary'),
+    allowNull: false,
+    defaultValue: 'tracking'
+  },
+  completionPointsAwarded: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 0
+  },
+  completionBadgeCode: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  completionBadgeTitle: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  completionBadgeIssuedAt: {
+    type: DataTypes.BIGINT,
+    allowNull: true
+  },
   metadata: {
     type: DataTypes.JSON,
     allowNull: true,

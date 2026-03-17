@@ -1,9 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { randomUUID } = require('crypto');
+const sequelize = require('../config/database');
 const Log = require('../models/Log');
 const authenticateToken = require('../middleware/auth');
 const { applyLogGoalCheckin } = require('../services/goalService');
+const { settleLogRewards } = require('../services/rewardService');
 
 // 获取所有日志
 router.get('/', authenticateToken, async (req, res) => {
@@ -20,8 +22,11 @@ router.get('/', authenticateToken, async (req, res) => {
 
 // 添加新日志
 router.post('/', authenticateToken, async (req, res) => {
+  const transaction = await sequelize.transaction();
+
   try {
     const { id, rawText, activity, category, durationMinutes, mood, importance, timestamp, metadata, images, location } = req.body;
+    const receivedAt = Date.now();
     const baseLog = {
       id: id || randomUUID(),
       userId: req.user.id,
@@ -32,15 +37,31 @@ router.post('/', authenticateToken, async (req, res) => {
       mood,
       importance,
       timestamp: timestamp || Date.now(),
-      metadata,
+      metadata: {
+        ...(metadata || {}),
+        serverReceivedAt: receivedAt
+      },
       images,
       location
     };
 
-    const { logData } = await applyLogGoalCheckin(req.user.id, baseLog);
-    const log = await Log.create(logData);
+    const { logData, goalEvents } = await applyLogGoalCheckin(req.user.id, baseLog, {
+      transaction,
+      settlementTimestamp: receivedAt
+    });
+
+    await settleLogRewards({
+      userId: req.user.id,
+      logData,
+      goalEvents,
+      settlementTimestamp: receivedAt
+    }, { transaction });
+
+    const log = await Log.create(logData, { transaction });
+    await transaction.commit();
     res.status(201).json(log);
   } catch (error) {
+    await transaction.rollback();
     res.status(500).json({ message: '创建日志失败', error: error.message });
   }
 });

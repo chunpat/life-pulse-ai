@@ -82,6 +82,8 @@
     "start_prompt": "Log something today and move one step closer.",
     "compose_label": "New plan",
     "compose_title": "Define this streak before you begin",
+    "personal_tab": "Personal Plans",
+    "official_tab": "Official Plans",
     "type_label": "Duration",
     "type_7_day": "7-day Sprint",
     "type_7_day_desc": "Great for getting back into logging",
@@ -101,6 +103,13 @@
     "compose_collapsed": "Expand",
     "compose_expanded": "Collapse",
     "delete_confirm": "Delete \"{{title}}\"? It will be removed from your plan records.",
+    "official_desc": "Official plans ship with official completion badges and richer rewards for focused challenge rounds.",
+    "official_primary_hint": "Official plans become the primary reward plan when joined and award an official badge on completion.",
+    "official_loading": "Loading official plan templates...",
+    "official_empty": "There are no published official plans yet.",
+    "join_official_plan": "Join Official Plan",
+    "official_points": "Complete for +{{points}} points",
+    "official_badge_preview": "Badge: {{badge}}",
     "today_done": "Today is already done. Keep going.",
     "today_pending": "Nothing logged today yet. Start with one small thing.",
     "pause": "Pause Goal",
@@ -130,7 +139,11 @@
     "add_more_title": "Add another plan",
     "add_more_desc": "Once you already have plans, this section stays collapsed until you want to add more.",
     "multi_active_hint": "Plans can run at the same time. One log today advances every active plan that has not checked in yet.",
+    "primary_hint": "Only one primary reward plan settles plan progress points and completion rewards at a time.",
     "delete_policy_hint": "Delete rule: plans without a first check-in can be deleted freely; started plans can be deleted only once per month.",
+    "primary_badge": "Primary reward plan",
+    "set_primary": "Make Primary",
+    "official_plan_badge": "Official plan",
     "started_badge": "Started",
     "not_started_badge": "Not started",
     "operation_failed": "Action failed. Please try again.",
@@ -139,6 +152,8 @@
     "progress_inline": "Progress {{current}} / {{total}}",
     "last_checkin": "Last check-in: {{date}}",
     "not_started_record": "No check-in yet",
+    "completion_badge": "Completion badge",
+    "completion_points": "Points +{{points}}",
     "title_presets": {
       "7_day": {
         "focus_reset": "7-day focus reset",
@@ -166,7 +181,118 @@
       "failed": "Interrupted"
     }
   },
+  "rewards": {
+    "title": "Growth rewards",
+    "achievement_title": "Achievement hub",
+    "achievement_desc": "Your points, badge wall, and latest earned records are collected here so progress feels tangible.",
+    "detail_title": "Points ledger",
+    "detail_desc": "Every reward event is listed here so you can see exactly where your points came from.",
+    "available_label": "Available points",
+    "lifetime_label": "Lifetime points",
+    "badge_count_label": "Badges earned",
+    "official_badge_count_label": "Official badges",
+    "level_label": "Level",
+    "level_value": "Lv.{{level}}",
+    "level_rule": "Level is based on lifetime points. Every {{count}} points raises one level.",
+    "level_progress_value": "Current tier {{current}} / {{total}}",
+    "next_level_remaining": "{{count}} points to Lv.{{level}}",
+    "next_level_target": "Next threshold {{count}}",
+    "points_value": "{{count}} points",
+    "primary_hint": "Your first valid log and your primary reward plan steadily build growth points.",
+    "latest_badge_label": "Latest badge",
+    "badge_earned_at": "Earned on {{date}}",
+    "empty_badge": "Finish a plan and your first completion badge will light up here.",
+    "no_badge_short": "None",
+    "default_theme": "Growth",
+    "official_badge": "Official badge",
+    "personal_badge": "Personal badge",
+    "badge_wall_title": "Badge wall",
+    "badge_wall_desc": "All of your earned badges are displayed here in the order you unlocked them.",
+    "recent_badges_title": "Recently earned",
+    "recent_badges_desc": "Your most recently unlocked badges stay visible here for a quick recap.",
+    "recent_activity_title": "Recent reward activity",
+    "recent_activity_desc": "Latest points and completion rewards appear here as they settle.",
+    "today_label": "Today",
+    "timeline_count": "Latest {{count}}",
+    "timeline_tag_official": "Official milestone",
+    "timeline_tag_completion": "Completion reward",
+    "timeline_tag_progress": "Plan progress",
+    "timeline_tag_daily": "Daily points",
+    "badge_detail_title": "Badge details",
+    "badge_detail_desc": "This badge marks a completed stage and gives the achievement a clearer identity in your progress record.",
+    "earned_date_label": "Earned",
+    "badge_scope_label": "Type",
+    "badge_theme_label": "Theme",
+    "badge_source_label": "Source plan",
+    "close_detail": "Close",
+    "filter_all": "All",
+    "filter_official": "Official",
+    "filter_personal": "Personal",
+    "empty_badge_wall": "No badges to show yet. Finish a plan to light up the first one.",
+    "empty_recent": "There are no newly earned badges yet.",
+    "balance_after": "Balance {{count}}",
+    "no_ledger": "No points yet. Your first valid log will start the ledger.",
+    "badges": {
+      "goal_7_day_completed": {
+        "title": "7-day Sprint Complete",
+        "short": "7-day Complete"
+      },
+      "goal_21_day_completed": {
+        "title": "21-day Habit Complete",
+        "short": "21-day Complete"
+      },
+      "official_early_sleep_21": {
+        "title": "Official Badge · Sleep Reset",
+        "short": "Sleep Reset"
+      },
+      "official_focus_reset_7": {
+        "title": "Official Badge · Focus Return",
+        "short": "Focus Return"
+      },
+      "official_exercise_rhythm_21": {
+        "title": "Official Badge · Exercise Rhythm",
+        "short": "Exercise Rhythm"
+      }
+    },
+    "events": {
+      "daily_valid_log": {
+        "title": "Daily valid log",
+        "desc": "Your first valid log today earned base growth points."
+      },
+      "daily_primary_goal_progress": {
+        "title": "Primary plan progress",
+        "desc": "{{title}} moved forward today and earned primary plan points."
+      },
+      "goal_completed_7_day": {
+        "title": "7-day plan completed",
+        "desc": "{{title}} finished the 7-day sprint."
+      },
+      "goal_completed_21_day": {
+        "title": "21-day plan completed",
+        "desc": "{{title}} finished the 21-day habit run."
+      },
+      "official_plan_completed": {
+        "title": "Official plan completed",
+        "desc": "{{title}} finished and its official completion badge is now unlocked."
+      }
+    }
+  },
   "logger": {
+    "plan_focus_label": "Current plan focus",
+    "plan_focus_empty_title": "Let plans lead this screen first",
+    "plan_focus_empty_desc": "Pick a 7-day or 21-day plan first, then start logging. The push from visible plan progress is stronger than points alone.",
+    "plan_primary_cta": "Log for today",
+    "plan_secondary_cta": "View plans",
+    "plan_parallel_hint": "{{count}} plans in parallel",
+    "streak_dashboard_label": "Consecutive wins",
+    "streak_dashboard_desc_active": "You have kept this streak moving for {{count}} days. One log today keeps the curve alive.",
+    "streak_dashboard_desc_paused": "The streak is preserved at {{count}} days while paused. Resume it when you want the rhythm back.",
+    "streak_dashboard_desc_completed": "This run peaked at {{count}} consecutive days and finished the full plan cleanly.",
+    "streak_dashboard_desc_failed": "This run stopped at {{count}} consecutive days. The next round can build from here.",
+    "streak_today_status_label": "Today's checkpoint",
+    "streak_momentum_label": "Streak momentum",
+    "streak_overflow_days": "+{{count}} more",
+    "reward_summary_label": "Reward summary",
     "launcher_label": "Quick log",
     "launcher_title": "Tap + to open instantly",
     "launcher_desc": "The input moved into a popup so the home page can stay focused on plans and prompts.",

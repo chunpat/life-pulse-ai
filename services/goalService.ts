@@ -41,6 +41,12 @@ export const completeGoal = async (goalId: string): Promise<Goal> => {
   });
 };
 
+export const setPrimaryGoal = async (goalId: string): Promise<Goal> => {
+  return apiClient(`${API_BASE_URL}/${goalId}/set-primary`, {
+    method: 'POST'
+  });
+};
+
 export const deleteGoal = async (goalId: string): Promise<void> => {
   await apiClient(`${API_BASE_URL}/${goalId}`, {
     method: 'DELETE'

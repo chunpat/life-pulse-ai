@@ -25,12 +25,12 @@ export default defineConfig(({ mode }) => {
         react(),
         VitePWA({
           registerType: 'autoUpdate',
-          includeAssets: ['apple-touch-icon.png'],
+          includeAssets: ['apple-touch-icon.png', 'favicon.ico', 'app-icon.svg'],
           manifest: {
             name: 'LifePulse AI · 爱记录',
             short_name: '爱记录',
             description: '记下每一天，慢慢看见变化',
-            theme_color: '#6366f1',
+            theme_color: '#f59e0b',
             icons: [
               {
                 src: 'pwa-192x192.png',

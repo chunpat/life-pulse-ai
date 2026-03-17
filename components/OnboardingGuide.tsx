@@ -47,14 +47,14 @@ const OnboardingGuide: React.FC<OnboardingGuideProps> = ({ onGenericClose }) => 
       
       {/* Tooltip Card */}
       <div 
-        className={`absolute w-64 bg-white p-5 rounded-2xl shadow-2xl transition-all duration-300 ease-out border-2 border-indigo-100 ${currentStep.position}`}
+        className={`absolute w-64 bg-white p-5 rounded-2xl shadow-2xl transition-all duration-300 ease-out border-2 border-amber-200 ${currentStep.position}`}
       >
         {/* Arrow */}
-        <div className={`absolute w-0 h-0 border-l-[16px] border-l-transparent border-r-[16px] border-r-transparent border-t-[16px] border-t-indigo-600 ${currentStep.arrow}`}></div>
+        <div className={`absolute w-0 h-0 border-l-[16px] border-l-transparent border-r-[16px] border-r-transparent border-t-[16px] border-t-amber-500 ${currentStep.arrow}`}></div>
 
         <div className="flex items-center justify-between mb-2">
            <h3 className="text-lg font-bold text-slate-800">{currentStep.title}</h3>
-           <span className="text-xs font-bold text-indigo-400 bg-indigo-50 px-2 py-1 rounded-full">{step + 1}/{steps.length}</span>
+            <span className="text-xs font-bold text-amber-700 bg-amber-50 px-2 py-1 rounded-full">{step + 1}/{steps.length}</span>
         </div>
         
         <p className="text-sm text-slate-600 leading-relaxed mb-4">
@@ -70,7 +70,7 @@ const OnboardingGuide: React.FC<OnboardingGuideProps> = ({ onGenericClose }) => 
            </button>
            <button 
              onClick={handleNext}
-             className="text-xs font-bold bg-indigo-600 text-white px-4 py-2 rounded-lg shadow-lg shadow-indigo-200 hover:bg-indigo-700 active:scale-95 transition-all"
+             className="text-xs font-bold bg-amber-500 text-slate-950 px-4 py-2 rounded-lg shadow-lg shadow-amber-200 hover:bg-amber-400 active:scale-95 transition-all"
            >
              {step === steps.length - 1 ? '知道了' : '下一步'}
            </button>

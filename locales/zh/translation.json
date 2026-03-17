@@ -82,6 +82,8 @@
     "start_prompt": "今天记一下，离目标更近一步。",
     "compose_label": "新建计划",
     "compose_title": "先把这次坚持定下来",
+    "personal_tab": "个人计划",
+    "official_tab": "官方计划",
     "type_label": "计划周期",
     "type_7_day": "7 天冲刺",
     "type_7_day_desc": "适合重新找回记录节奏",
@@ -101,6 +103,13 @@
     "compose_collapsed": "展开",
     "compose_expanded": "收起",
     "delete_confirm": "确定删除“{{title}}”吗？删除后不会再出现在计划记录里。",
+    "official_desc": "官方计划会自带官方完成徽章和更高积分，适合做阶段性的公开挑战。",
+    "official_primary_hint": "官方计划创建后会自动成为主奖励计划，完成后发放官方徽章。",
+    "official_loading": "正在加载官方计划模板...",
+    "official_empty": "暂时还没有上线中的官方计划。",
+    "join_official_plan": "加入官方计划",
+    "official_points": "完成 +{{points}} 积分",
+    "official_badge_preview": "徽章：{{badge}}",
     "today_done": "今天已完成，继续保持。",
     "today_pending": "今天还没记，先写下一件小事吧。",
     "pause": "暂停目标",
@@ -130,7 +139,11 @@
     "add_more_title": "继续添加计划",
     "add_more_desc": "已有计划时这里默认折叠，你随时可以展开再加新的计划。",
     "multi_active_hint": "计划可以多个同时进行。今天写一次，会同步推进今天还没打卡的进行中计划。",
+    "primary_hint": "只有一个主奖励计划会结算计划推进积分和完成奖励，你可以随时切换。",
     "delete_policy_hint": "删除规则：未开始的计划可直接删除；已开始的计划每月最多删除 1 次。",
+    "primary_badge": "主奖励计划",
+    "set_primary": "设为主奖励",
+    "official_plan_badge": "官方计划",
     "started_badge": "已开始",
     "not_started_badge": "未开始",
     "operation_failed": "操作失败，请稍后再试。",
@@ -139,6 +152,8 @@
     "progress_inline": "进度 {{current}} / {{total}}",
     "last_checkin": "最近一次记录：{{date}}",
     "not_started_record": "还没有完成过打卡",
+    "completion_badge": "完成徽章",
+    "completion_points": "奖励积分 +{{points}}",
     "title_presets": {
       "7_day": {
         "focus_reset": "7 天专注重启",
@@ -166,7 +181,118 @@
       "failed": "已中断"
     }
   },
+  "rewards": {
+    "title": "成长奖励",
+    "achievement_title": "成就区",
+    "achievement_desc": "这里集中展示你的积分、徽章墙和最近获得记录，让阶段成果可以被看见。",
+    "detail_title": "积分明细",
+    "detail_desc": "这里会记录每一次积分发放的来源，方便你知道分数从哪里来。",
+    "available_label": "当前积分",
+    "lifetime_label": "累计积分",
+    "badge_count_label": "已获徽章",
+    "official_badge_count_label": "官方徽章",
+    "level_label": "等级",
+    "level_value": "Lv.{{level}}",
+    "level_rule": "等级按累计积分计算。每累计 {{count}} 积分提升 1 级。",
+    "level_progress_value": "本级进度 {{current}} / {{total}}",
+    "next_level_remaining": "距 Lv.{{level}} 还差 {{count}} 积分",
+    "next_level_target": "下一等级门槛 {{count}}",
+    "points_value": "{{count}} 积分",
+    "primary_hint": "每日有效记录和主奖励计划会稳定累积成长积分。",
+    "latest_badge_label": "最新点亮徽章",
+    "badge_earned_at": "{{date}} 获得",
+    "empty_badge": "完成一个计划后，这里会点亮你的第一枚完成徽章。",
+    "no_badge_short": "暂无",
+    "default_theme": "成长",
+    "official_badge": "官方徽章",
+    "personal_badge": "个人徽章",
+    "badge_wall_title": "徽章墙",
+    "badge_wall_desc": "你的所有完成徽章会按获得时间陈列在这里。",
+    "recent_badges_title": "最近获得",
+    "recent_badges_desc": "最近点亮的徽章会优先展示，方便你快速回看刚完成的阶段。",
+    "recent_activity_title": "最近奖励动态",
+    "recent_activity_desc": "最近的积分和完成奖励会在这里更新。",
+    "today_label": "今天",
+    "timeline_count": "最近 {{count}} 条",
+    "timeline_tag_official": "官方里程碑",
+    "timeline_tag_completion": "完成奖励",
+    "timeline_tag_progress": "计划推进",
+    "timeline_tag_daily": "每日积分",
+    "badge_detail_title": "徽章详情",
+    "badge_detail_desc": "这枚徽章对应你已经完成的阶段成果，可以作为当前成长进度的标记。",
+    "earned_date_label": "获得时间",
+    "badge_scope_label": "徽章类型",
+    "badge_theme_label": "主题",
+    "badge_source_label": "来源计划",
+    "close_detail": "关闭",
+    "filter_all": "全部",
+    "filter_official": "官方",
+    "filter_personal": "个人",
+    "empty_badge_wall": "还没有可展示的徽章，先完成一个计划把第一枚点亮。",
+    "empty_recent": "最近还没有新获得的徽章。",
+    "balance_after": "余额 {{count}}",
+    "no_ledger": "还没有积分流水。完成一次有效记录后，这里会开始累计。",
+    "badges": {
+      "goal_7_day_completed": {
+        "title": "7 天冲刺完成",
+        "short": "7 天完成"
+      },
+      "goal_21_day_completed": {
+        "title": "21 天养成完成",
+        "short": "21 天完成"
+      },
+      "official_early_sleep_21": {
+        "title": "官方徽章 · 早睡重启",
+        "short": "早睡重启"
+      },
+      "official_focus_reset_7": {
+        "title": "官方徽章 · 专注回归",
+        "short": "专注回归"
+      },
+      "official_exercise_rhythm_21": {
+        "title": "官方徽章 · 运动节律",
+        "short": "运动节律"
+      }
+    },
+    "events": {
+      "daily_valid_log": {
+        "title": "每日有效记录",
+        "desc": "今天完成了第一条有效记录，获得基础成长积分。"
+      },
+      "daily_primary_goal_progress": {
+        "title": "主奖励计划推进",
+        "desc": "{{title}} 在今天推进了一天，获得主计划积分。"
+      },
+      "goal_completed_7_day": {
+        "title": "7 天计划完成",
+        "desc": "{{title}} 顺利完成了 7 天冲刺。"
+      },
+      "goal_completed_21_day": {
+        "title": "21 天计划完成",
+        "desc": "{{title}} 顺利完成了 21 天养成。"
+      },
+      "official_plan_completed": {
+        "title": "官方计划完成",
+        "desc": "{{title}} 已完成，官方完成徽章已经点亮。"
+      }
+    }
+  },
   "logger": {
+    "plan_focus_label": "当前主题计划",
+    "plan_focus_empty_title": "先让计划成为记录页主线",
+    "plan_focus_empty_desc": "先定一个 7 天或 21 天计划，再开始记录，连续推进的激励会比只看积分更强。",
+    "plan_primary_cta": "去完成今天记录",
+    "plan_secondary_cta": "查看计划区",
+    "plan_parallel_hint": "并行 {{count}} 个计划",
+    "streak_dashboard_label": "连续成功天数",
+    "streak_dashboard_desc_active": "已经连续推进 {{count}} 天，今天补一条记录就能继续拉长这条曲线。",
+    "streak_dashboard_desc_paused": "暂停后连续天数会被保留为 {{count}}，恢复后可以继续重新拉起节奏。",
+    "streak_dashboard_desc_completed": "这一轮最高连续推进到 {{count}} 天，已经顺利跑完整个计划。",
+    "streak_dashboard_desc_failed": "这轮连续推进停在 {{count}} 天，下一轮可以从这里重新起势。",
+    "streak_today_status_label": "今日打卡状态",
+    "streak_momentum_label": "连续节奏",
+    "streak_overflow_days": "+{{count}} 天势能",
+    "reward_summary_label": "奖励摘要",
     "launcher_label": "快速记录",
     "launcher_title": "点底部 + 直接弹出",
     "launcher_desc": "记录输入改成弹窗了，首页先留给计划和提醒，不再把输入区挤到下面。",

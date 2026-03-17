@@ -2,19 +2,23 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
-import { Goal, LogEntry } from '../types';
+import { Goal, LogEntry, RewardBadge, RewardLedgerEntry, RewardProfile } from '../types';
 import { getDailyInsight } from '../services/qwenService';
+import AchievementArea from './AchievementArea';
 
 interface AnalyticsProps {
   logs: LogEntry[];
   goals: Goal[];
+  rewardProfile?: RewardProfile | null;
+  rewardBadges?: RewardBadge[];
+  rewardLedger?: RewardLedgerEntry[];
   isGuest?: boolean;
   insight: string;
   isGenerating: boolean;
   onLoginClick?: () => void;
 }
 
-const COLORS = ['#4F46E5', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#64748B'];
+const COLORS = ['#f59e0b', '#10b981', '#f97316', '#ef4444', '#14b8a6', '#64748b'];
 
 const formatDateKey = (value: number | string | Date) => {
   const date = new Date(value);
@@ -27,6 +31,9 @@ const formatDateKey = (value: number | string | Date) => {
 const Analytics: React.FC<AnalyticsProps> = ({ 
   logs, 
   goals,
+  rewardProfile = null,
+  rewardBadges = [],
+  rewardLedger = [],
   isGuest = false,
   insight: defaultInsight,
   isGenerating: isDefaultGenerating,
@@ -164,7 +171,7 @@ const Analytics: React.FC<AnalyticsProps> = ({
                key={p}
                onClick={() => setPeriod(p)}
                className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                 period === p ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'
+                 period === p ? 'bg-white text-amber-700 shadow-sm' : 'text-slate-400 hover:text-slate-600'
                }`}
              >
                {t(`analytics.filter.${p}`)}
@@ -187,14 +194,14 @@ const Analytics: React.FC<AnalyticsProps> = ({
       </div>
 
       {/* AI Card */}
-      <div className="bg-indigo-600 rounded-3xl p-6 text-white shadow-xl shadow-indigo-100 relative overflow-hidden transition-all duration-300 hover:shadow-indigo-300/50">
+      <div className="bg-[linear-gradient(135deg,#f59e0b_0%,#d97706_58%,#92400e_100%)] rounded-3xl p-6 text-white shadow-xl shadow-amber-200 relative overflow-hidden transition-all duration-300 hover:shadow-amber-300/50">
         <div className="relative z-10 w-full animate-in fade-in zoom-in-95 duration-500">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-indigo-500/50 rounded-lg backdrop-blur-sm">
-                  <svg className="w-5 h-5 text-indigo-100" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71L12 2z"/></svg>
+              <div className="p-1.5 bg-white/15 rounded-lg backdrop-blur-sm">
+                  <svg className="w-5 h-5 text-amber-100" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71L12 2z"/></svg>
               </div>
-              <span className="text-xs font-bold uppercase tracking-widest text-indigo-200">
+              <span className="text-xs font-bold uppercase tracking-widest text-amber-100">
                 {t(`analytics.ai_card.title.${period}`)}
               </span>
             </div>
@@ -212,7 +219,7 @@ const Analytics: React.FC<AnalyticsProps> = ({
 
           {parsedContent ? (
              <div className="space-y-4">
-                <div className="text-lg font-bold leading-relaxed border-l-4 border-indigo-400 pl-3">
+               <div className="text-lg font-bold leading-relaxed border-l-4 border-amber-300 pl-3">
                    {parsedContent.summary}
                 </div>
                 <div className="space-y-2.5 mt-2">
@@ -233,7 +240,7 @@ const Analytics: React.FC<AnalyticsProps> = ({
           {isGuest && onLoginClick && (
             <button 
               onClick={onLoginClick}
-              className="mt-6 w-full py-3 bg-white text-indigo-600 hover:bg-indigo-50 rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-900/20"
+              className="mt-6 w-full py-3 bg-white text-amber-700 hover:bg-amber-50 rounded-xl text-sm font-bold transition-all shadow-lg shadow-amber-900/10"
             >
               {t('analytics.ai_card.unlock')}
             </button>
@@ -241,8 +248,8 @@ const Analytics: React.FC<AnalyticsProps> = ({
         </div>
         
         {/* Background Decor */}
-        <div className="absolute top-[-20%] right-[-20%] w-64 h-64 bg-indigo-500/30 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-[-10%] left-[-10%] w-40 h-40 bg-purple-500/20 rounded-full blur-3xl"></div>
+        <div className="absolute top-[-20%] right-[-20%] w-64 h-64 bg-amber-300/30 rounded-full blur-3xl animate-pulse"></div>
+        <div className="absolute bottom-[-10%] left-[-10%] w-40 h-40 bg-orange-300/25 rounded-full blur-3xl"></div>
       </div>
 
       {!isGuest && (
@@ -294,6 +301,14 @@ const Analytics: React.FC<AnalyticsProps> = ({
             </p>
           )}
         </div>
+      )}
+
+      {!isGuest && rewardProfile && (
+        <AchievementArea
+          rewardProfile={rewardProfile}
+          rewardBadges={rewardBadges}
+          rewardLedger={rewardLedger}
+        />
       )}
 
       <div className="grid grid-cols-2 gap-4">
@@ -355,7 +370,7 @@ const Analytics: React.FC<AnalyticsProps> = ({
                    labelFormatter={() => t('history.modal_detail')}
                    formatter={(value: any, name: any, props: any) => [`${t('history.form.importance')}: ${value}`, props.payload.mood]}
                 />
-                <Bar dataKey="importance" fill="#4F46E5" radius={[4, 4, 0, 0]} />
+                 <Bar dataKey="importance" fill="#d97706" radius={[4, 4, 0, 0]} />
               </BarChart>
            </ResponsiveContainer>
         </div>

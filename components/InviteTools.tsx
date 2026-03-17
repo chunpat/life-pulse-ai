@@ -42,7 +42,7 @@ const InviteTools: React.FC<InviteToolsProps> = ({ user, onClose }) => {
         </button>
 
         <div className="text-center mb-6">
-          <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-3">
+          <div className="w-12 h-12 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center mx-auto mb-3">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
           </div>
           <h2 className="text-xl font-bold text-slate-800">{t('invite.title', 'Invite Friends')}</h2>
@@ -58,7 +58,7 @@ const InviteTools: React.FC<InviteToolsProps> = ({ user, onClose }) => {
               <select
                 value={platform}
                 onChange={(e) => setPlatform(e.target.value)}
-                className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 appearance-none"
+                className="w-full bg-slate-50 border-none rounded-xl px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-amber-400/30 appearance-none"
               >
                 {platforms.map(p => (
                   <option key={p.id} value={p.id}>{p.label}</option>
@@ -81,7 +81,7 @@ const InviteTools: React.FC<InviteToolsProps> = ({ user, onClose }) => {
              </div>
              <button 
                onClick={handleCopy}
-               className={`flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${copied ? 'bg-green-500 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+               className={`flex-none px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${copied ? 'bg-green-500 text-white' : 'bg-amber-500 text-slate-950 hover:bg-amber-400'}`}
              >
                {copied ? t('invite.copied_btn', 'Copied!') : t('invite.copy_btn', 'Copy')}
              </button>

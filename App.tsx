@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { ViewMode, LogEntry, User, Goal, GoalCreateInput } from './types';
+import { ViewMode, LogEntry, User, Goal, GoalCreateInput, RewardBadge, RewardLedgerEntry, RewardProfile } from './types';
 import Logger from './components/Logger';
 import History from './components/History';
 import Analytics from './components/Analytics';
@@ -9,7 +9,8 @@ import Auth from './components/Auth';
 import { Layout } from './components/Layout';
 import InviteTools from './components/InviteTools';
 import { storageService } from './services/storageService';
-import { createGoal, deleteGoal, fetchGoals, pauseGoal, resumeGoal } from './services/goalService';
+import { createGoal, deleteGoal, fetchGoals, pauseGoal, resumeGoal, setPrimaryGoal } from './services/goalService';
+import { fetchRewardBadges, fetchRewardLedger, fetchRewardProfile } from './services/rewardService';
 
 const GUEST_STORAGE_USER = 'guest_user_v1';
 const AUTH_TOKEN = 'lifepulse_token';
@@ -24,6 +25,9 @@ const App: React.FC = () => {
   const [dailyInsight, setDailyInsight] = useState<string>('');
   const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [rewardProfile, setRewardProfile] = useState<RewardProfile | null>(null);
+  const [rewardBadges, setRewardBadges] = useState<RewardBadge[]>([]);
+  const [rewardLedger, setRewardLedger] = useState<RewardLedgerEntry[]>([]);
   const [isGoalMutating, setIsGoalMutating] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
@@ -59,12 +63,18 @@ const App: React.FC = () => {
 
     const fetchAppData = async () => {
       try {
-        const [logData, goalData] = await Promise.all([
+        const [logData, goalData, rewardData, rewardBadgesData, rewardLedgerData] = await Promise.all([
           storageService.getLogs(),
-          user.status === 'authenticated' ? fetchGoals() : Promise.resolve([])
+          user.status === 'authenticated' ? fetchGoals() : Promise.resolve([]),
+          user.status === 'authenticated' ? fetchRewardProfile() : Promise.resolve(null),
+          user.status === 'authenticated' ? fetchRewardBadges() : Promise.resolve([]),
+          user.status === 'authenticated' ? fetchRewardLedger(20) : Promise.resolve([])
         ]);
         setLogs(logData);
         setGoals(goalData);
+        setRewardProfile(rewardData);
+        setRewardBadges(rewardBadgesData);
+        setRewardLedger(rewardLedgerData);
       } finally {
         setIsLoading(false);
       }
@@ -80,12 +90,18 @@ const App: React.FC = () => {
       // 登录后同步本地数据
       await storageService.syncLocalToCloud();
       // 重新拉取最新的云端数据
-      const [updatedLogs, updatedGoals] = await Promise.all([
+      const [updatedLogs, updatedGoals, updatedRewardProfile, updatedRewardBadges, updatedRewardLedger] = await Promise.all([
         storageService.getLogs(),
-        fetchGoals()
+        fetchGoals(),
+        fetchRewardProfile(),
+        fetchRewardBadges(),
+        fetchRewardLedger(20)
       ]);
       setLogs(updatedLogs);
       setGoals(updatedGoals);
+      setRewardProfile(updatedRewardProfile);
+      setRewardBadges(updatedRewardBadges);
+      setRewardLedger(updatedRewardLedger);
     }
   };
 
@@ -98,11 +114,17 @@ const App: React.FC = () => {
     setUser(guestUser);
     localStorage.setItem(GUEST_STORAGE_USER, JSON.stringify(guestUser));
     setGoals([]);
+    setRewardProfile(null);
+    setRewardBadges([]);
+    setRewardLedger([]);
   };
 
   const handleLogout = () => {
     setUser(null);
     setGoals([]);
+    setRewardProfile(null);
+    setRewardBadges([]);
+    setRewardLedger([]);
     setIsLoggerComposerOpen(false);
     localStorage.removeItem(GUEST_STORAGE_USER);
     localStorage.removeItem(AUTH_TOKEN);
@@ -136,6 +158,28 @@ const App: React.FC = () => {
     }
   }, [user]);
 
+  const refreshRewards = useCallback(async () => {
+    if (!user || user.status !== 'authenticated') {
+      setRewardProfile(null);
+      setRewardBadges([]);
+      setRewardLedger([]);
+      return;
+    }
+
+    try {
+      const [latestRewardProfile, latestRewardBadges, latestRewardLedger] = await Promise.all([
+        fetchRewardProfile(),
+        fetchRewardBadges(),
+        fetchRewardLedger(20)
+      ]);
+      setRewardProfile(latestRewardProfile);
+      setRewardBadges(latestRewardBadges);
+      setRewardLedger(latestRewardLedger);
+    } catch (error) {
+      console.error('Reward refresh error:', error);
+    }
+  }, [user]);
+
   const handleCloseGuide = () => {
     setShowGuide(false);
     localStorage.setItem('hasSeenGuide_v1', 'true');
@@ -155,12 +199,12 @@ const App: React.FC = () => {
     setLogs(prev => prev.map(log => log.id === entryWithUser.id ? { ...log, ...savedEntry } : log));
 
     if (user?.status === 'authenticated') {
-      await refreshGoals();
+      await Promise.all([refreshGoals(), refreshRewards()]);
     }
 
     setNewLogAdded(true);
     setTimeout(() => setNewLogAdded(false), 1000); // 1秒后重置
-  }, [user, logs.length, refreshGoals]);
+  }, [user, logs.length, refreshGoals, refreshRewards]);
 
   const deleteLog = useCallback(async (id: string) => {
     setLogs(prev => prev.filter(log => log.id !== id));
@@ -232,6 +276,21 @@ const App: React.FC = () => {
     }
   }, [refreshGoals, user]);
 
+  const handleSetPrimaryGoal = useCallback(async (goalId: string) => {
+    if (!user || user.status !== 'authenticated') return;
+
+    setIsGoalMutating(true);
+    try {
+      await setPrimaryGoal(goalId);
+      await refreshGoals();
+    } catch (error) {
+      console.error('Set primary goal error:', error);
+      throw error;
+    } finally {
+      setIsGoalMutating(false);
+    }
+  }, [refreshGoals, user]);
+
   // 统一生成 AI 洞察的逻辑，防止重复请求
   const generateInsight = useCallback(async (currentLogs: LogEntry[]) => {
     if (!user || user.status === 'guest' || currentLogs.length === 0) return;
@@ -289,6 +348,7 @@ const App: React.FC = () => {
           isGuest={user.status === 'guest'}
           logs={logs}
           goals={goals}
+          rewardProfile={rewardProfile}
           isComposerOpen={isLoggerComposerOpen}
           isGoalActionLoading={isGoalMutating}
           onOpenComposer={handleOpenLoggerComposer}
@@ -296,6 +356,7 @@ const App: React.FC = () => {
           onCreateGoal={handleCreateGoal}
           onPauseGoal={handlePauseGoal}
           onResumeGoal={handleResumeGoal}
+          onSetPrimaryGoal={handleSetPrimaryGoal}
           onDeleteGoal={handleDeleteGoal}
         />
       )}
@@ -309,6 +370,9 @@ const App: React.FC = () => {
         <Analytics 
           logs={logs} 
           goals={goals}
+          rewardProfile={rewardProfile}
+          rewardBadges={rewardBadges}
+          rewardLedger={rewardLedger}
           isGuest={user.status === 'guest'} 
           insight={dailyInsight}
           isGenerating={isGeneratingInsight}
