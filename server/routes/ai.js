@@ -5,11 +5,38 @@ const authenticateToken = require('../middleware/auth');
 
 const apiKey = process.env.DASHSCOPE_API_KEY;
 const modelName = process.env.QWEN_MODEL || 'qwen-plus';
+const enableThinking = String(process.env.QWEN_ENABLE_THINKING || 'false').toLowerCase() === 'true';
+
+const THINKING_TOGGLE_MODELS = [
+  'qwen3.5-plus',
+  'qwen3.5-flash',
+  'qwen-plus',
+  'qwen-turbo',
+  'qwen-max',
+  'qwq-plus'
+];
 
 const client = new OpenAI({
   apiKey: apiKey,
   baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
 });
+
+function supportsThinkingToggle(model) {
+  return THINKING_TOGGLE_MODELS.some((candidate) => model.startsWith(candidate));
+}
+
+function createChatCompletion(payload) {
+  const request = {
+    model: modelName,
+    ...payload
+  };
+
+  if (supportsThinkingToggle(modelName)) {
+    request.enable_thinking = enableThinking;
+  }
+
+  return client.chat.completions.create(request);
+}
 
 // 解析生活日志 - 允许游客访问，前端负责次数限制
 router.post('/parse', async (req, res) => {
@@ -86,8 +113,7 @@ Return format example:
   ]
 }`;
 
-    const response = await client.chat.completions.create({
-      model: modelName,
+    const response = await createChatCompletion({
       messages: [
         {
           role: "system",
@@ -177,8 +203,7 @@ JSON 结构要求：
 }
 确保 bulletPoints 数组至少包含 3 条内容。`;
 
-    const response = await client.chat.completions.create({
-      model: modelName,
+    const response = await createChatCompletion({
       messages: [
         {
           role: "system",
@@ -270,8 +295,7 @@ Return in JSON format:
     const userPromptZh = `最近活动记录：\n${recentLogs}\n\n当前状态：今天是${dayLabel}，现在是${timeStr}。请给出建议。`;
     const userPromptEn = `Recent logs:\n${recentLogs}\n\nCurrent status: Today is ${dayLabel}, time is ${timeStr}. Please provide suggestions.`;
 
-    const response = await client.chat.completions.create({
-      model: modelName,
+    const response = await createChatCompletion({
       messages: [
         {
           role: "system",

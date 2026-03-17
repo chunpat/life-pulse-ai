@@ -57,7 +57,10 @@ DB_NAME=lifepulse_db
 # 阿里云通义千问 API Key
 DASHSCOPE_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx
 QWEN_MODEL=qwen-plus
+QWEN_ENABLE_THINKING=false
 ```
+
+`qwen3.5-plus` 这类混合思考模型默认会先思考再回答。如果你用它来做日志解析、洞察和建议，建议保持 `QWEN_ENABLE_THINKING=false`，能明显降低返回延迟。
 
 ### 3. 运行项目
 
