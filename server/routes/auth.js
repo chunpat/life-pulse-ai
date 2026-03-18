@@ -7,7 +7,7 @@ const User = require('../models/User');
 // 注册
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password, referrerId, source } = req.body;
+    const { name, email, password, referrerId, source, isOfficial } = req.body;
     
     // 检查昵称是否已存在
     const existingName = await User.findOne({ where: { name } });
@@ -28,7 +28,8 @@ router.post('/register', async (req, res) => {
       email: email || null, 
       password,
       referrerId: referrerId || null,
-      source: source || null
+      source: source || null,
+      isOfficial: Boolean(isOfficial)
     });
     
     const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
@@ -39,6 +40,7 @@ router.post('/register', async (req, res) => {
         id: user.id,
         name: user.name,
         email: user.email,
+        isOfficial: user.isOfficial,
         status: 'authenticated'
       }
     });
@@ -79,6 +81,7 @@ router.post('/login', async (req, res) => {
         id: user.id,
         name: user.name,
         email: user.email,
+        isOfficial: user.isOfficial,
         status: 'authenticated'
       }
     });

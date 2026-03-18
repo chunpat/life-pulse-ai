@@ -24,6 +24,7 @@ export interface User {
   name: string;
   email?: string;
   avatar?: string;
+  isOfficial?: boolean;
   status: AuthStatus;
 }
 

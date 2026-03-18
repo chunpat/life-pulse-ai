@@ -56,7 +56,7 @@ const App: React.FC = () => {
     
     // Check for first-time guide
     const hasSeenGuide = localStorage.getItem('hasSeenGuide_v1');
-    if (!hasSeenGuide) {
+    if (!hasSeenGuide && !user.isOfficial) {
       // Small delay to ensure layout is ready
       setTimeout(() => setShowGuide(true), 500);
     }
@@ -109,6 +109,7 @@ const App: React.FC = () => {
     const guestUser: User = {
       id: 'guest_local',
       name: '游客', // Simplified to '游客' to match translation key logic in Layout.tsx
+      isOfficial: false,
       status: 'guest'
     };
     setUser(guestUser);

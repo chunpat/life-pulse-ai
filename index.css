@@ -12,3 +12,36 @@
     display: none;
   }
 }
+
+@layer components {
+  .plan-focus-card {
+    container-type: inline-size;
+  }
+
+  .plan-focus-card-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .plan-focus-card-summary,
+  .plan-focus-card-aside {
+    min-width: 0;
+  }
+
+  .plan-focus-card-aside {
+    width: 100%;
+  }
+
+  @container (min-width: 40rem) {
+    .plan-focus-card-shell {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 20rem;
+      align-items: stretch;
+    }
+
+    .plan-focus-card-aside {
+      width: 20rem;
+    }
+  }
+}

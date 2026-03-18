@@ -39,7 +39,7 @@ export const Layout: React.FC<LayoutProps> = ({
     <div className="fixed inset-0 sm:flex sm:items-center sm:justify-center bg-slate-100">
       
       {/* App Shell */}
-      <div className="w-full h-full sm:h-[850px] sm:max-w-[400px] bg-slate-50 sm:rounded-[3rem] sm:shadow-2xl sm:border-[8px] sm:border-slate-900 overflow-hidden flex flex-col relative">
+      <div className="w-full h-full sm:h-[850px] sm:max-w-[400px] bg-slate-50 sm:rounded-[3rem] sm:shadow-2xl sm:border-[8px] sm:border-slate-900 overflow-hidden flex flex-col relative transform-gpu">
         
         {/* Onboarding Guide Overlay */}
         {showGuide && <OnboardingGuide onGenericClose={onCloseGuide} />}

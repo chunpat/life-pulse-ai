@@ -193,7 +193,8 @@ const postReward = async ({
   goalId = null,
   logId = null,
   badgeId = null,
-  metadata = {}
+  metadata = {},
+  recordedAt = null
 }, options = {}) => {
   const txOptions = getTransactionOptions(options);
   const existingLedger = await RewardLedger.findOne({ where: { idempotencyKey }, ...txOptions });
@@ -218,7 +219,7 @@ const postReward = async ({
   }, txOptions);
 
   try {
-    const ledger = await RewardLedger.create({
+    const ledgerPayload = {
       userId,
       eventType,
       amount,
@@ -228,7 +229,17 @@ const postReward = async ({
       badgeId,
       idempotencyKey,
       metadata
-    }, txOptions);
+    };
+
+    if (recordedAt) {
+      const timestamp = new Date(recordedAt);
+      if (!Number.isNaN(timestamp.getTime())) {
+        ledgerPayload.createdAt = timestamp;
+        ledgerPayload.updatedAt = timestamp;
+      }
+    }
+
+    const ledger = await RewardLedger.create(ledgerPayload, txOptions);
 
     return {
       created: true,
@@ -254,7 +265,8 @@ const issueBadge = async ({
   title,
   family = 'goal_completion',
   issueKey,
-  metadata = {}
+  metadata = {},
+  issuedAt = null
 }, options = {}) => {
   const txOptions = getTransactionOptions(options);
   const existingBadge = await UserBadge.findOne({ where: { issueKey }, ...txOptions });
@@ -267,7 +279,7 @@ const issueBadge = async ({
   }
 
   try {
-    const badge = await UserBadge.create({
+    const badgePayload = {
       userId,
       goalId,
       badgeCode,
@@ -275,8 +287,18 @@ const issueBadge = async ({
       family,
       issueKey,
       metadata,
-      issuedAt: Date.now()
-    }, txOptions);
+      issuedAt: issuedAt || Date.now()
+    };
+
+    if (issuedAt) {
+      const timestamp = new Date(issuedAt);
+      if (!Number.isNaN(timestamp.getTime())) {
+        badgePayload.createdAt = timestamp;
+        badgePayload.updatedAt = timestamp;
+      }
+    }
+
+    const badge = await UserBadge.create(badgePayload, txOptions);
 
     return {
       created: true,
@@ -293,7 +315,7 @@ const issueBadge = async ({
   }
 };
 
-const settleGoalCompletionRewards = async ({ goal, logId = null }, options = {}) => {
+const settleGoalCompletionRewards = async ({ goal, logId = null, recordedAt = null }, options = {}) => {
   const txOptions = getTransactionOptions(options);
   const rewardConfig = await getGoalCompletionRewardConfig(goal, options);
   const summary = {
@@ -309,6 +331,7 @@ const settleGoalCompletionRewards = async ({ goal, logId = null }, options = {})
       title: rewardConfig.badgeTitle,
       family: rewardConfig.badgeFamily,
       issueKey: `goal-completion-badge:${goal.id}`,
+      issuedAt: recordedAt,
       metadata: {
         goalType: goal.goalType,
         totalDays: goal.totalDays,
@@ -346,6 +369,7 @@ const settleGoalCompletionRewards = async ({ goal, logId = null }, options = {})
         goalId: goal.id,
         logId,
         idempotencyKey: `goal-complete-points:${goal.id}`,
+        recordedAt,
         metadata: {
           goalType: goal.goalType,
           totalDays: goal.totalDays,
@@ -376,6 +400,7 @@ const settleLogRewards = async ({
   settlementTimestamp
 }, options = {}) => {
   const settlementDateKey = formatDateKey(settlementTimestamp || Date.now());
+  const rewardTimestamp = settlementTimestamp || Date.now();
   const summary = {
     pointsEarned: 0,
     badgeAwards: []
@@ -388,6 +413,7 @@ const settleLogRewards = async ({
       amount: DAILY_VALID_LOG_POINTS,
       logId: logData.id,
       idempotencyKey: `daily-valid-log:${userId}:${settlementDateKey}`,
+      recordedAt: rewardTimestamp,
       metadata: {
         dateKey: settlementDateKey
       }
@@ -408,6 +434,7 @@ const settleLogRewards = async ({
       goalId: primaryGoalEvent.goal.id,
       logId: logData.id,
       idempotencyKey: `daily-primary-progress:${primaryGoalEvent.goal.id}:${settlementDateKey}`,
+      recordedAt: rewardTimestamp,
       metadata: {
         dateKey: settlementDateKey,
         goalType: primaryGoalEvent.goal.goalType,
@@ -427,7 +454,8 @@ const settleLogRewards = async ({
 
     const completionSummary = await settleGoalCompletionRewards({
       goal: goalEvent.goal,
-      logId: logData.id
+      logId: logData.id,
+      recordedAt: rewardTimestamp
     }, options);
 
     summary.pointsEarned += completionSummary.pointsEarned;
@@ -514,6 +542,7 @@ module.exports = {
   getRewardLevel,
   getRewardProfileSummary,
   getOrCreateRewardProfile,
+  issueBadge,
   listUserBadges,
   listRewardLedger,
   postReward,

@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "seed:official-demo": "npm --prefix server run seed:official-demo"
   },
   "dependencies": {
     "i18next": "^25.7.4",

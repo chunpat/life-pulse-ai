@@ -903,15 +903,15 @@ const PlanFocusCard: React.FC<{
 
   return (
     <div
-      className="rounded-[2rem] border p-5 shadow-sm"
+      className="plan-focus-card rounded-[2rem] border p-5 shadow-sm"
       style={{
         borderColor: `${accentColor}33`,
         background: `linear-gradient(135deg, ${accentColor}26 0%, rgba(255,248,235,0.96) 48%, rgba(255,255,255,0.98) 100%)`
       }}
     >
       <div className="flex flex-col gap-5">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-stretch xl:justify-between">
-          <div className="min-w-0 max-w-2xl">
+        <div className="plan-focus-card-shell">
+          <div className="plan-focus-card-summary min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="rounded-full bg-white/85 px-3 py-1.5 text-[11px] font-bold text-amber-700 border border-white shadow-sm">
                 {t('logger.plan_focus_label')}
@@ -951,7 +951,7 @@ const PlanFocusCard: React.FC<{
             </div>
           </div>
 
-          <div className="xl:w-[320px] shrink-0 rounded-[1.6rem] bg-slate-950 px-4 py-4 text-white shadow-sm">
+          <div className="plan-focus-card-aside rounded-[1.6rem] bg-slate-950 px-4 py-4 text-white shadow-sm">
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-200">
               {t('logger.streak_dashboard_label')}
             </p>

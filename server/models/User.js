@@ -32,6 +32,11 @@ const User = sequelize.define('User', {
   source: {
     type: DataTypes.STRING,
     allowNull: true
+  },
+  isOfficial: {
+    type: DataTypes.BOOLEAN,
+    allowNull: false,
+    defaultValue: false
   }
 }, {
   hooks: {
