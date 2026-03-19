@@ -35,6 +35,12 @@ export const resumeGoal = async (goalId: string): Promise<Goal> => {
   });
 };
 
+export const restartGoal = async (goalId: string): Promise<Goal> => {
+  return apiClient(`${API_BASE_URL}/${goalId}/restart`, {
+    method: 'POST'
+  });
+};
+
 export const completeGoal = async (goalId: string): Promise<Goal> => {
   return apiClient(`${API_BASE_URL}/${goalId}/complete`, {
     method: 'POST'

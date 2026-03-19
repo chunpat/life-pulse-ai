@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>爱记录 AI 首篇图卡合成页</title>
+    <style>
+      :root {
+        --paper: #f5f2ec;
+        --paper-strong: #ebe5da;
+        --surface: rgba(255, 255, 255, 0.72);
+        --ink: #22201c;
+        --muted: #6b655d;
+        --line: rgba(34, 32, 28, 0.1);
+        --accent: #344036;
+        --accent-strong: #262f28;
+        --card-shadow: 0 24px 56px rgba(28, 25, 22, 0.1);
+        --radius-xl: 34px;
+        --radius-lg: 24px;
+        --radius-md: 18px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        font-family: "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+        background: linear-gradient(180deg, #faf8f4 0%, #f1ece4 100%);
+      }
+
+      img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      a {
+        color: inherit;
+      }
+
+      .shell {
+        width: min(100%, 1180px);
+        margin: 0 auto;
+        padding: 32px 20px 60px;
+      }
+
+      .toolbar {
+        position: sticky;
+        top: 18px;
+        z-index: 20;
+        margin-bottom: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 16px 18px;
+        border: 1px solid rgba(255, 255, 255, 0.72);
+        border-radius: 24px;
+        background: rgba(250, 247, 241, 0.92);
+        backdrop-filter: blur(18px);
+        box-shadow: 0 12px 32px rgba(37, 33, 29, 0.06);
+      }
+
+      .toolbar-copy {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .toolbar-kicker {
+        font-size: 12px;
+        line-height: 1;
+        letter-spacing: 0.18em;
+        color: var(--muted);
+        text-transform: uppercase;
+      }
+
+      .toolbar-title {
+        margin: 0;
+        font-size: clamp(22px, 3vw, 34px);
+        line-height: 1.05;
+        font-weight: 800;
+      }
+
+      .toolbar-subtitle {
+        margin: 0;
+        font-size: 14px;
+        color: var(--muted);
+      }
+
+      .toolbar-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .toolbar button,
+      .toolbar a {
+        appearance: none;
+        border: none;
+        cursor: pointer;
+        text-decoration: none;
+        padding: 12px 16px;
+        border-radius: 999px;
+        font-size: 14px;
+        font-weight: 700;
+        transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+      }
+
+      .toolbar button:hover,
+      .toolbar a:hover {
+        transform: translateY(-1px);
+      }
+
+      .button-primary {
+        color: #f7f4ed;
+        background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
+        box-shadow: 0 12px 24px rgba(38, 47, 40, 0.18);
+      }
+
+      .button-secondary {
+        color: var(--ink);
+        background: rgba(255, 255, 255, 0.75);
+        border: 1px solid rgba(29, 27, 25, 0.08);
+      }
+
+      .notes {
+        margin-bottom: 32px;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .note {
+        padding: 16px 18px;
+        border-radius: 20px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.64);
+        box-shadow: 0 10px 24px rgba(37, 33, 29, 0.04);
+      }
+
+      .note strong {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--muted);
+      }
+
+      .note span {
+        font-size: 15px;
+        line-height: 1.5;
+      }
+
+      .card-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 26px;
+      }
+
+      .slide {
+        position: relative;
+        width: min(100%, 920px);
+        aspect-ratio: 4 / 5;
+        margin: 0 auto;
+        overflow: hidden;
+        border-radius: var(--radius-xl);
+        border: 1px solid var(--line);
+        box-shadow: var(--card-shadow);
+        background: var(--paper);
+      }
+
+      .slide::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), transparent 28%);
+      }
+
+      .slide-body {
+        position: relative;
+        z-index: 1;
+        height: 100%;
+        padding: 34px;
+      }
+
+      .slide-number {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 88px;
+        padding: 9px 14px;
+        border-radius: 999px;
+        background: rgba(29, 27, 25, 0.08);
+        color: rgba(29, 27, 25, 0.76);
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .slide-title {
+        margin: 18px 0 12px;
+        font-size: clamp(32px, 4.6vw, 54px);
+        line-height: 1.03;
+        letter-spacing: -0.03em;
+        font-weight: 900;
+      }
+
+      .slide-subtitle {
+        margin: 0;
+        font-size: clamp(15px, 1.9vw, 20px);
+        line-height: 1.62;
+        color: rgba(34, 32, 28, 0.8);
+      }
+
+      .eyebrow {
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.4;
+        font-weight: 700;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.16em;
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 16px;
+      }
+
+      .chip {
+        padding: 9px 12px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.62);
+        font-size: 13px;
+        font-weight: 650;
+        color: rgba(34, 32, 28, 0.72);
+      }
+
+      .grid-hero,
+      .grid-feature,
+      .grid-summary,
+      .grid-cta {
+        display: grid;
+        gap: 22px;
+        height: 100%;
+      }
+
+      .grid-hero {
+        grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+      }
+
+      .grid-feature {
+        grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.98fr);
+      }
+
+      .grid-summary {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      }
+
+      .grid-cta {
+        grid-template-columns: minmax(0, 1.06fr) minmax(0, 0.94fr);
+      }
+
+      .panel {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        min-height: 0;
+        border-radius: calc(var(--radius-xl) - 10px);
+        overflow: hidden;
+      }
+
+      .panel-paper {
+        background: linear-gradient(160deg, rgba(255, 255, 255, 0.92), rgba(244, 239, 231, 0.96));
+        border: 1px solid var(--line);
+      }
+
+      .panel-ink {
+        color: #f7f4ed;
+        background: linear-gradient(160deg, var(--accent) 0%, var(--accent-strong) 100%);
+      }
+
+      .panel-amber {
+        color: var(--ink);
+        background: linear-gradient(160deg, #f2eee7 0%, #e8e1d6 100%);
+      }
+
+      .panel-red {
+        color: #f7f4ed;
+        background: linear-gradient(160deg, #41483f 0%, #2b312c 100%);
+      }
+
+      .panel-inner {
+        height: 100%;
+        padding: 30px;
+      }
+
+      .image-stage {
+        position: relative;
+        height: 100%;
+        background: linear-gradient(180deg, #f8f5ef 0%, #ede7dc 100%);
+      }
+
+      .image-stage img {
+        object-fit: contain;
+        padding: 22px;
+      }
+
+      .image-caption {
+        position: absolute;
+        left: 20px;
+        right: 20px;
+        bottom: 18px;
+        padding: 12px 14px;
+        border-radius: 18px;
+        background: rgba(249, 245, 238, 0.94);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 8px 20px rgba(36, 31, 26, 0.08);
+      }
+
+      .image-caption strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 12px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .image-caption span {
+        display: block;
+        font-size: 15px;
+        line-height: 1.45;
+      }
+
+      .floating-inset {
+        position: absolute;
+        right: 18px;
+        bottom: 18px;
+        width: 42%;
+        aspect-ratio: 9 / 14;
+        padding: 8px;
+        border-radius: 24px;
+        background: rgba(249, 245, 238, 0.96);
+        box-shadow: 0 12px 24px rgba(29, 27, 25, 0.1);
+      }
+
+      .floating-inset img {
+        border-radius: 18px;
+        padding: 0;
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 20px;
+      }
+
+      .metric {
+        padding: 16px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.78);
+        border: 1px solid rgba(29, 27, 25, 0.06);
+      }
+
+      .metric strong {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 28px;
+        line-height: 1;
+      }
+
+      .metric span {
+        display: block;
+        font-size: 14px;
+        line-height: 1.45;
+        color: var(--muted);
+      }
+
+      .compare-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 24px;
+      }
+
+      .compare-col {
+        padding: 18px;
+        border-radius: 20px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+      }
+
+      .compare-col.highlight {
+        color: #f7f4ed;
+        background: linear-gradient(160deg, var(--accent) 0%, var(--accent-strong) 100%);
+        border-color: rgba(38, 47, 40, 0.22);
+      }
+
+      .compare-col h3 {
+        margin: 0 0 10px;
+        font-size: 17px;
+        line-height: 1.2;
+      }
+
+      .compare-col p {
+        margin: 0 0 8px;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .compare-col p:last-child {
+        margin-bottom: 0;
+      }
+
+      .stamp {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: rgba(255, 248, 239, 0.16);
+        color: rgba(255, 248, 239, 0.94);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .image-pair {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+        height: 100%;
+      }
+
+      .image-card {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        border-radius: 22px;
+        background: linear-gradient(180deg, #f8f5ef 0%, #ece6db 100%);
+        border: 1px solid var(--line);
+      }
+
+      .image-card .label {
+        padding: 14px 16px 0;
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        color: var(--muted);
+        text-transform: uppercase;
+      }
+
+      .image-card img {
+        object-fit: contain;
+        padding: 12px 14px 18px;
+      }
+
+      .roadmap {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 20px;
+      }
+
+      .roadmap-item {
+        padding: 14px 16px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.66);
+        border: 1px solid var(--line);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+
+      .cta-block {
+        display: grid;
+        gap: 14px;
+        margin-top: 22px;
+      }
+
+      .cta-item {
+        padding: 14px 16px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.68);
+        color: var(--ink);
+        border: 1px solid var(--line);
+      }
+
+      .cta-item strong {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 14px;
+        line-height: 1.35;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: rgba(34, 32, 28, 0.54);
+      }
+
+      .cta-item span {
+        display: block;
+        font-size: 16px;
+        line-height: 1.5;
+      }
+
+      .tiny-note {
+        margin-top: 14px;
+        font-size: 13px;
+        line-height: 1.5;
+        color: rgba(247, 241, 232, 0.74);
+      }
+
+      .footer-tip {
+        width: min(100%, 920px);
+        margin: 18px auto 0;
+        padding: 0 6px;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--muted);
+        text-align: center;
+      }
+
+      @media (max-width: 960px) {
+        .toolbar,
+        .notes,
+        .grid-hero,
+        .grid-feature,
+        .grid-summary,
+        .grid-cta,
+        .compare-grid,
+        .image-pair,
+        .roadmap {
+          grid-template-columns: 1fr;
+        }
+
+        .toolbar {
+          position: static;
+          padding: 18px;
+        }
+
+        .toolbar-actions {
+          width: 100%;
+        }
+
+        .toolbar button,
+        .toolbar a {
+          flex: 1 1 auto;
+          text-align: center;
+        }
+
+        .slide {
+          aspect-ratio: auto;
+          min-height: 1120px;
+        }
+
+        .slide-body {
+          padding: 24px;
+        }
+
+        .image-stage,
+        .panel,
+        .panel-inner,
+        .image-card {
+          min-height: 0;
+        }
+
+        .floating-inset {
+          position: static;
+          width: 100%;
+          margin-top: 16px;
+          aspect-ratio: 4 / 5;
+        }
+      }
+
+      @media print {
+        @page {
+          size: A4 portrait;
+          margin: 10mm;
+        }
+
+        body {
+          background: #ffffff;
+        }
+
+        .toolbar,
+        .notes,
+        .footer-tip {
+          display: none;
+        }
+
+        .shell {
+          width: 100%;
+          max-width: none;
+          padding: 0;
+        }
+
+        .card-stack {
+          gap: 0;
+        }
+
+        .slide {
+          width: 160mm;
+          height: 200mm;
+          margin: 0 auto;
+          box-shadow: none;
+          break-after: page;
+          page-break-after: always;
+          border-radius: 0;
+          border: 1px solid rgba(29, 27, 25, 0.08);
+        }
+
+        .slide:last-child {
+          break-after: auto;
+          page-break-after: auto;
+        }
+
+        .slide-body {
+          padding: 22px;
+        }
+
+        .slide-title {
+          font-size: 34px;
+        }
+
+        .slide-subtitle {
+          font-size: 14px;
+        }
+
+        .chip,
+        .compare-col p,
+        .roadmap-item,
+        .cta-item span {
+          font-size: 12px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="toolbar">
+        <div class="toolbar-copy">
+          <span class="toolbar-kicker">Promotion Compose</span>
+          <h1 class="toolbar-title">爱记录 AI 首篇 8 张图卡</h1>
+          <p class="toolbar-subtitle">独立预览页 · 4:5 比例 · 本地截图或打印导出</p>
+        </div>
+        <div class="toolbar-actions">
+          <button class="button-primary" type="button" onclick="window.print()">打印 / 导出 PDF</button>
+          <a class="button-secondary" href="./README.md" target="_blank" rel="noreferrer">查看使用说明</a>
+        </div>
+      </header>
+
+      <section class="notes">
+        <div class="note">
+          <strong>当前口径</strong>
+          <span>只讲已上线能力；开源统一写“准备开源”或“后续公开源码”。</span>
+        </div>
+        <div class="note">
+          <strong>导出方式</strong>
+          <span>可以直接逐张截图，也可以用浏览器打印预览一张卡一页导出 PDF。</span>
+        </div>
+        <div class="note">
+          <strong>待替换项</strong>
+          <span>图 8 的试用地址和二维码可在正式发布前替换成真实入口。</span>
+        </div>
+      </section>
+
+      <main class="card-stack">
+        <article class="slide">
+          <div class="slide-body panel-ink">
+            <span class="slide-number">01 / Problem</span>
+            <p class="eyebrow">首篇开场</p>
+            <h2 class="slide-title">我们每天都在过日子，<br />却很少回头看见自己</h2>
+            <p class="slide-subtitle">
+              很多记录工具的问题，不是记不下来，<br />
+              而是写完就沉底，过几天也不想再翻。<br />
+              我想做的是一款记录之后还能继续给你反馈的工具。
+            </p>
+          </div>
+        </article>
+
+        <article class="slide">
+          <div class="slide-body grid-hero">
+            <section class="panel panel-red">
+              <div class="panel-inner">
+                <span class="slide-number">02 / Positioning</span>
+                <p class="eyebrow">产品定位</p>
+                <h2 class="slide-title">所以我做了一个<br />AI 生活记录工具</h2>
+                <p class="slide-subtitle">
+                  先把记录门槛降下来，<br />
+                  再让整理、回看和变化反馈自然发生。
+                </div>
+              </div>
+            </section>
+            <section class="panel panel-paper image-stage">
+              <img src="./01-home.png" alt="爱记录 AI 首页截图" />
+            </section>
+          </div>
+        </article>
+
+        <article class="slide">
+          <div class="slide-body grid-feature">
+            <section class="panel panel-paper image-stage">
+              <img src="./02-composer.png" alt="自然语言记录输入截图" />
+              <div class="floating-inset">
+                <img src="./03-history.png" alt="结构化历史记录截图" />
+              </div>
+            </section>
+            <section class="panel panel-amber">
+              <div class="panel-inner">
+                <span class="slide-number">03 / Input To Structure</span>
+                <p class="eyebrow">核心功能一</p>
+                <h2 class="slide-title">随手写一句，<br />AI 帮你整理成完整记录</h2>
+                <p class="slide-subtitle">
+                  像平时说话一样输入就够了。<br />
+                  活动、分类、时长和状态，会在后面自动被整理出来。
+                </div>
+              </div>
+            </section>
+          </div>
+        </article>
+
+        <article class="slide">
+          <div class="slide-body grid-feature">
+            <section class="panel panel-ink">
+              <div class="panel-inner">
+                <span class="slide-number">04 / Insight</span>
+                <p class="eyebrow">核心功能二</p>
+                <h2 class="slide-title">不只是记下来，<br />它也会帮你回头看</h2>
+                <p class="slide-subtitle">
+                  记录之后，产品会继续补上总结、趋势和时间分布。<br />
+                  这样你看到的不是一条条日志，而是一段时间里的自己。
+                </div>
+              </div>
+            </section>
+            <section class="panel panel-paper image-stage">
+              <img src="./04-analytics-ai.png" alt="AI 洞察分析截图" />
+              <div class="floating-inset">
+                <img src="./09-analytics-week.png" alt="周维度分析截图" />
+              </div>
+            </section>
+          </div>
+        </article>
+
+        <article class="slide">
+          <div class="slide-body grid-feature">
+            <section class="panel panel-paper image-stage">
+              <img src="./05-finance.png" alt="自动记账与财务统计截图" />
+            </section>
+            <section class="panel panel-red">
+              <div class="panel-inner">
+                <span class="slide-number">05 / Finance</span>
+                <p class="eyebrow">核心功能三</p>
+                <h2 class="slide-title">顺手提一句花费，<br />也能自动拆成记账信息</h2>
+                <p class="slide-subtitle">
+                  如果日志里本来就提到了消费，<br />
+                  那它就该顺手进入轻量账本，而不是让你再记一遍。
+                </div>
+              </div>
+            </section>
+          </div>
+        </article>
+
+        <article class="slide">
+          <div class="slide-body panel-amber">
+            <span class="slide-number">06 / Compare</span>
+            <p class="eyebrow">差异化表达</p>
+            <h2 class="slide-title">它不是只多了一层 AI</h2>
+            <p class="slide-subtitle">
+              更关键的是把记录、复盘、轻量记账和目标反馈放进同一个闭环。
+            </p>
+            <div class="compare-grid">
+              <section class="compare-col">
+                <h3>普通日记</h3>
+                <p>能留下内容</p>
+                <p>但很难回头看见变化</p>
+              </section>
+              <section class="compare-col">
+                <h3>习惯打卡</h3>
+                <p>能做执行记录</p>
+                <p>但缺少真实生活上下文</p>
+              </section>
+              <section class="compare-col">
+                <h3>记账工具</h3>
+                <p>能看支出变化</p>
+                <p>但看不到时间和状态</p>
+              </section>
+              <section class="compare-col highlight">
+                <h3>爱记录 AI</h3>
+                <p>自然语言记录</p>
+                <p>后续洞察和反馈放在一起</p>
+              </section>
+            </div>
+          </div>
+        </article>
+
+        <article class="slide">
+          <div class="slide-body grid-summary">
+            <section class="panel panel-paper">
+              <div class="panel-inner">
+                <span class="slide-number">07 / Feedback</span>
+                <p class="eyebrow">目标与反馈</p>
+                <h2 class="slide-title">记录不只是留下内容，<br />也应该留下反馈</h2>
+                <p class="slide-subtitle">
+                  所以我加了目标、积分和徽章。<br />
+                  不是为了复杂，而是想给持续记录一点正反馈。
+                </div>
+              </div>
+            </section>
+            <section class="panel panel-paper">
+              <div class="panel-inner image-pair">
+                <div class="image-card">
+                  <span class="label">Goals</span>
+                  <img src="./06-goals.png" alt="目标进度截图" />
+                </div>
+                <div class="image-card">
+                  <span class="label">Badges</span>
+                  <img src="./07-badges.png" alt="徽章与成就截图" />
+                </div>
+              </div>
+            </section>
+          </div>
+        </article>
+
+        <article class="slide">
+          <div class="slide-body grid-cta">
+            <section class="panel panel-ink">
+              <div class="panel-inner">
+                <span class="slide-number">08 / Future + CTA</span>
+                <p class="eyebrow">未来规划与引导</p>
+                <h2 class="slide-title">接下来继续打磨，<br />也准备逐步开源</h2>
+                <p class="slide-subtitle">
+                  后面会继续补多模态记录、智能提醒和更多语言支持。<br />
+                  源码也会整理后公开，先欢迎试用，再关注后续进展。
+                </p>
+                <div class="roadmap">
+                  <div class="roadmap-item">多模态记录：图片、地点、天气</div>
+                  <div class="roadmap-item">智能提醒：更轻量的习惯提醒</div>
+                  <div class="roadmap-item">多语言支持：继续完善国际化体验</div>
+                  <div class="roadmap-item">源码整理：部署文档与仓库说明准备中</div>
+                </div>
+                <div class="cta-block">
+                  <div class="cta-item">
+                    <strong>Try First</strong>
+                    <span>发布前把这里换成真实试用地址、二维码或可复制链接。</span>
+                  </div>
+                  <div class="cta-item">
+                    <strong>Open Source Later</strong>
+                    <span>当前统一口径是“准备开源”，不提前出现仓库地址。</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <section class="panel panel-paper image-stage">
+              <img src="./08-invite.png" alt="体验与邀请入口截图" />
+            </section>
+          </div>
+        </article>
+      </main>
+
+      <p class="footer-tip">
+        如果你要继续改图，只需要替换 example 目录里的 PNG、调整 compose.html 里的文案或 CTA 即可；不需要重新接入项目路由。
+      </p>
+    </div>
+  </body>
+</html>

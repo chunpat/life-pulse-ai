@@ -9,6 +9,7 @@ const {
   getGoalCheckins,
   listGoals,
   pauseGoal,
+  restartGoal,
   resumeGoal,
   setPrimaryGoal
 } = require('../services/goalService');
@@ -19,9 +20,11 @@ const getGoalErrorStatus = (message) => {
   if (message === '不支持的目标类型') return 400;
   if (message === '只有进行中的计划才能暂停') return 400;
   if (message === '只有已暂停的计划才能恢复') return 400;
+  if (message === '只有已中断的计划才能重启') return 400;
   if (message === '只有进行中的计划才能设为主奖励计划') return 400;
   if (message === '有官方计划进行中时，不能将个人计划设为主奖励计划') return 400;
   if (message === '计划尚未完成，不能手动结束') return 400;
+  if (message === '该计划的重启次数已用完') return 409;
   if (message === '该官方计划已在进行中') return 409;
   if (message === '本月已删除过 1 个已开始的计划，已开始的计划每月只能删除 1 次') return 409;
   return 500;
@@ -79,6 +82,16 @@ router.post('/:id/pause', authenticateToken, async (req, res) => {
 router.post('/:id/resume', authenticateToken, async (req, res) => {
   try {
     const goal = await resumeGoal(req.user.id, req.params.id);
+    res.json(goal);
+  } catch (error) {
+    const statusCode = getGoalErrorStatus(error.message);
+    res.status(statusCode).json({ message: error.message, error: error.message });
+  }
+});
+
+router.post('/:id/restart', authenticateToken, async (req, res) => {
+  try {
+    const goal = await restartGoal(req.user.id, req.params.id);
     res.json(goal);
   } catch (error) {
     const statusCode = getGoalErrorStatus(error.message);

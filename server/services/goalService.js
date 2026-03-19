@@ -16,6 +16,49 @@ const GOAL_CONFIG = {
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
+const GOAL_MATCH_GROUPS = {
+  exercise: [
+    '运动', '锻炼', '健身', '训练', '力量', '拉伸', '瑜伽', '跑步', '晨跑', '夜跑', '慢跑',
+    '散步', '快走', '走路', '徒步', '骑行', '单车', '游泳', '跳绳', '球类',
+    'exercise', 'workout', 'fitness', 'gym', 'run', 'running', 'walk', 'walking', 'swim', 'swimming', 'yoga', 'stretch'
+  ],
+  reading: [
+    '读书', '阅读', '看书', '书籍', '书单', '学习', '复习', '背单词', '课程', '听课', '刷题', '做题',
+    'read', 'reading', 'book', 'books', 'study', 'learning', 'learn', 'course'
+  ],
+  review: [
+    '复盘', 'k线', '盘前', '盘后', '交易', '行情', '股票', '基金', '投资', '市场', '看盘',
+    'review', 'trading', 'market', 'chart', 'kline', 'stock', 'stocks', 'invest'
+  ],
+  sleep: [
+    '早睡', '睡觉', '睡前', '入睡', '作息', '休息', '熄灯', '睡眠',
+    'sleep', 'bed', 'rest', 'lightsout'
+  ],
+  focus: [
+    '专注', '深度工作', '工作', '任务', '项目', '推进', '编码', '写代码', '开发', '产出',
+    'focus', 'deepwork', 'deep work', 'work', 'project', 'task', 'coding', 'code', 'development'
+  ],
+  writing: [
+    '写作', '写字', '文章', '博客', '日记', '周记', '总结',
+    'write', 'writing', 'blog', 'journal', 'essay'
+  ]
+};
+
+const OFFICIAL_THEME_GROUP_MAP = {
+  sleep: ['sleep'],
+  focus: ['focus'],
+  exercise: ['exercise']
+};
+
+const GENERIC_GOAL_TERMS = [
+  '计划', '打卡', '记录', '坚持', '习惯', '每日', '每天', '日常', '挑战',
+  'official', 'plan', 'daily', 'habit', 'checkin', 'check-in', 'streak', 'log'
+];
+
+const GOAL_TITLE_NOISE_TERMS = [
+  '官方计划', '官方', '7天', '21天', '7 day', '21 day', '冲刺', '养成', '回归', '重启'
+];
+
 const getTransactionOptions = (options = {}) => (options.transaction ? { transaction: options.transaction } : {});
 
 const formatDateKey = (value) => {
@@ -37,12 +80,129 @@ const sanitizeText = (value, maxLength = 60) => {
   return text.slice(0, maxLength);
 };
 
+const normalizeMatchText = (value) => {
+  if (typeof value !== 'string') return '';
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, '');
+};
+
+const uniqueValues = (values) => Array.from(new Set(values.filter(Boolean)));
+
+const buildLogMatchContext = (logData) => {
+  const parts = [
+    logData.rawText,
+    logData.activity,
+    logData.category,
+    Array.isArray(logData.tags) ? logData.tags.join(' ') : ''
+  ].filter(Boolean);
+
+  return {
+    normalizedText: normalizeMatchText(parts.join(' ')),
+    normalizedCategory: typeof logData.category === 'string' ? logData.category.trim().toLowerCase() : ''
+  };
+};
+
+const stripNoiseTerms = (value) => {
+  let text = typeof value === 'string' ? value : '';
+
+  for (const noiseTerm of GOAL_TITLE_NOISE_TERMS) {
+    text = text.replace(new RegExp(noiseTerm, 'ig'), ' ');
+  }
+
+  return text.trim();
+};
+
+const extractGoalTitleFragments = (goal) => {
+  const rawTitle = [goal.title, goal.rewardTitle].filter(Boolean).join(' ');
+  const cleanedTitle = stripNoiseTerms(rawTitle);
+  const normalizedFullTitle = normalizeMatchText(cleanedTitle);
+  const tokenMatches = cleanedTitle.match(/[a-z0-9]+|[\u4e00-\u9fa5]{2,}/gi) || [];
+
+  return uniqueValues([
+    normalizedFullTitle,
+    ...tokenMatches
+      .map(token => normalizeMatchText(token))
+      .filter(token => token.length >= 2 && !GENERIC_GOAL_TERMS.includes(token))
+  ]);
+};
+
+const extractGoalMatchProfile = (goal) => {
+  const normalizedTitle = normalizeMatchText([goal.title, goal.rewardTitle].filter(Boolean).join(' '));
+  const theme = typeof goal.metadata?.theme === 'string' ? goal.metadata.theme.trim().toLowerCase() : '';
+  const groups = new Set(OFFICIAL_THEME_GROUP_MAP[theme] || []);
+
+  for (const [groupName, keywords] of Object.entries(GOAL_MATCH_GROUPS)) {
+    if (keywords.some(keyword => normalizedTitle.includes(normalizeMatchText(keyword)))) {
+      groups.add(groupName);
+    }
+  }
+
+  const fragments = extractGoalTitleFragments(goal);
+  const keywords = uniqueValues(
+    Array.from(groups).flatMap(groupName => GOAL_MATCH_GROUPS[groupName] || [])
+      .map(keyword => normalizeMatchText(keyword))
+  );
+
+  const nonGenericFragments = fragments.filter(fragment => !GENERIC_GOAL_TERMS.includes(fragment));
+  const isGenericGoal = keywords.length === 0 && nonGenericFragments.length === 0;
+
+  return {
+    groups: Array.from(groups),
+    keywords,
+    fragments: nonGenericFragments,
+    isGenericGoal
+  };
+};
+
+const doesGoalMatchLog = (goal, logContext) => {
+  if (!logContext.normalizedText) {
+    return false;
+  }
+
+  const profile = extractGoalMatchProfile(goal);
+
+  if (profile.isGenericGoal) {
+    return true;
+  }
+
+  if (profile.keywords.some(keyword => logContext.normalizedText.includes(keyword))) {
+    return true;
+  }
+
+  if (profile.fragments.some(fragment => logContext.normalizedText.includes(fragment))) {
+    return true;
+  }
+
+  if (goal.planScope === 'official') {
+    if (profile.groups.includes('exercise') && logContext.normalizedCategory === 'health') {
+      return true;
+    }
+
+    if (profile.groups.includes('focus') && logContext.normalizedCategory === 'work') {
+      return true;
+    }
+  }
+
+  return false;
+};
+
 const hasGoalStarted = (goal) => goal.completedDays > 0 || Boolean(goal.lastCheckInDate);
 
 const buildGoalMetadata = (goal, patch = {}) => ({
   ...(goal.metadata || {}),
   ...patch
 });
+
+const getGoalRestartLimit = (goalOrTotalDays) => {
+  const totalDays = typeof goalOrTotalDays === 'number'
+    ? goalOrTotalDays
+    : Number(goalOrTotalDays?.totalDays || 0);
+
+  return Math.max(1, Math.floor(totalDays / 7));
+};
+
+const getGoalRestartCount = (goal) => Number(goal.metadata?.restartCount || 0);
 
 const getCurrentMonthRange = () => {
   const now = new Date();
@@ -122,7 +282,11 @@ const refreshSingleActiveGoal = async (goal, todayKey, options = {}) => {
   if (shouldFailWithoutCheckin || missedMoreThanOneDay) {
     await goal.update({
       status: 'failed',
-      currentStreak: 0
+      currentStreak: 0,
+      metadata: buildGoalMetadata(goal, {
+        interruptedAt: Date.now(),
+        restartLimit: getGoalRestartLimit(goal)
+      })
     }, txOptions);
     return null;
   }
@@ -231,6 +395,8 @@ const createGoalForUser = async (userId, goalInput, options = {}) => {
       rewardRole: 'primary',
       metadata: {
         source: 'official-plan',
+        restartCount: 0,
+        restartLimit: getGoalRestartLimit(officialPlan.totalDays),
         officialPlanSlug: officialPlan.slug,
         officialPlanBadgeCode: officialPlan.badgeCode,
         officialPlanTitle: officialPlan.title,
@@ -256,7 +422,9 @@ const createGoalForUser = async (userId, goalInput, options = {}) => {
     planScope: 'personal',
     rewardRole: activePrimaryGoal ? 'tracking' : 'primary',
     metadata: {
-      source: 'quick-start'
+      source: 'quick-start',
+      restartCount: 0,
+      restartLimit: getGoalRestartLimit(config.totalDays)
     }
   }, txOptions);
 };
@@ -315,6 +483,50 @@ const resumeGoal = async (userId, goalId, options = {}) => {
   }, txOptions);
 
   await ensurePrimaryRewardGoal(userId, null, options);
+
+  return Goal.findOne({ where: { id: goalId, userId }, ...txOptions });
+};
+
+const restartGoal = async (userId, goalId, options = {}) => {
+  const txOptions = getTransactionOptions(options);
+  const goal = await Goal.findOne({ where: { id: goalId, userId }, ...txOptions });
+
+  if (!goal) {
+    throw new Error('目标不存在');
+  }
+
+  if (goal.status !== 'failed') {
+    throw new Error('只有已中断的计划才能重启');
+  }
+
+  const restartLimit = getGoalRestartLimit(goal);
+  const restartCount = getGoalRestartCount(goal);
+
+  if (restartCount >= restartLimit) {
+    throw new Error('该计划的重启次数已用完');
+  }
+
+  await GoalCheckin.destroy({
+    where: { goalId: goal.id, userId },
+    ...txOptions
+  });
+
+  await goal.update({
+    status: 'active',
+    startedAt: Date.now(),
+    completedDays: 0,
+    currentStreak: 0,
+    lastCheckInDate: null,
+    completedAt: null,
+    metadata: buildGoalMetadata(goal, {
+      interruptedAt: null,
+      restartedAt: Date.now(),
+      restartCount: restartCount + 1,
+      restartLimit
+    })
+  }, txOptions);
+
+  await ensurePrimaryRewardGoal(userId, goal.id, options);
 
   return Goal.findOne({ where: { id: goalId, userId }, ...txOptions });
 };
@@ -434,6 +646,7 @@ const getGoalCheckins = async (userId, goalId, options = {}) => {
 const applyLogGoalCheckin = async (userId, logData, options = {}) => {
   const txOptions = getTransactionOptions(options);
   const activeGoals = await refreshActiveGoals(userId, options);
+  const logContext = buildLogMatchContext(logData);
 
   if (!activeGoals.length) {
     return {
@@ -448,6 +661,10 @@ const applyLogGoalCheckin = async (userId, logData, options = {}) => {
   const createdGoalCheckins = [];
 
   for (const activeGoal of activeGoals) {
+    if (!doesGoalMatchLog(activeGoal, logContext)) {
+      continue;
+    }
+
     if (activeGoal.lastCheckInDate === dateKey) {
       continue;
     }
@@ -546,6 +763,7 @@ module.exports = {
   listGoals,
   pauseGoal,
   refreshActiveGoals,
+  restartGoal,
   resumeGoal,
   setPrimaryGoal
 };

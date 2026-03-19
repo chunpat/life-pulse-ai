@@ -63,6 +63,7 @@ interface LoggerProps {
   onCloseComposer: () => void;
   onCreateGoal: (goalInput: GoalCreateInput) => Promise<void>;
   onPauseGoal: (goalId: string) => Promise<void>;
+  onRestartGoal: (goalId: string) => Promise<void>;
   onResumeGoal: (goalId: string) => Promise<void>;
   onSetPrimaryGoal: (goalId: string) => Promise<void>;
   onDeleteGoal: (goalId: string) => Promise<void>;
@@ -82,6 +83,7 @@ const Logger: React.FC<LoggerProps> = ({
   onCloseComposer,
   onCreateGoal,
   onPauseGoal,
+  onRestartGoal,
   onResumeGoal,
   onSetPrimaryGoal,
   onDeleteGoal
@@ -107,7 +109,8 @@ const Logger: React.FC<LoggerProps> = ({
 
   const activeGoals = goals.filter((goal) => goal.status === 'active');
   const primaryGoal = activeGoals.find((goal) => goal.rewardRole === 'primary') || activeGoals[0] || null;
-  const focusGoal = primaryGoal || goals.find((goal) => goal.status === 'paused') || goals[0] || null;
+  const interruptedGoalsCount = goals.filter((goal) => goal.status === 'failed').length;
+  const focusGoal = primaryGoal || goals.find((goal) => goal.status === 'paused') || null;
   const todayKey = formatDateKey(Date.now());
 
   // Fetch Smart Suggestions
@@ -505,6 +508,7 @@ const Logger: React.FC<LoggerProps> = ({
           <PlanFocusCard
             goal={focusGoal}
             activeGoalsCount={activeGoals.length}
+            interruptedGoalsCount={interruptedGoalsCount}
             rewardProfile={rewardProfile}
             todayKey={todayKey}
             onOpenComposer={() => handleQuickCompose()}
@@ -517,6 +521,7 @@ const Logger: React.FC<LoggerProps> = ({
               isGoalActionLoading={isGoalActionLoading}
               onCreateGoal={onCreateGoal}
               onPauseGoal={onPauseGoal}
+              onRestartGoal={onRestartGoal}
               onResumeGoal={onResumeGoal}
               onSetPrimaryGoal={onSetPrimaryGoal}
               onDeleteGoal={onDeleteGoal}
@@ -833,11 +838,12 @@ export default Logger;
 const PlanFocusCard: React.FC<{
   goal: Goal | null;
   activeGoalsCount: number;
+  interruptedGoalsCount: number;
   rewardProfile?: RewardProfile | null;
   todayKey: string;
   onOpenComposer: () => void;
   onOpenPlanner: () => void;
-}> = ({ goal, activeGoalsCount, rewardProfile, todayKey, onOpenComposer, onOpenPlanner }) => {
+}> = ({ goal, activeGoalsCount, interruptedGoalsCount, rewardProfile, todayKey, onOpenComposer, onOpenPlanner }) => {
   const { t } = useTranslation();
 
   if (!goal) {
@@ -849,10 +855,14 @@ const PlanFocusCard: React.FC<{
               {t('logger.plan_focus_label')}
             </p>
             <h3 className="mt-1 text-2xl font-black tracking-tight text-slate-900">
-              {t('logger.plan_focus_empty_title')}
+              {interruptedGoalsCount > 0
+                ? t('logger.plan_focus_interrupted_title', { count: interruptedGoalsCount })
+                : t('logger.plan_focus_empty_title')}
             </h3>
             <p className="mt-2 text-sm text-slate-600 leading-relaxed">
-              {t('logger.plan_focus_empty_desc')}
+              {interruptedGoalsCount > 0
+                ? t('logger.plan_focus_interrupted_desc')
+                : t('logger.plan_focus_empty_desc')}
             </p>
             {rewardProfile && (
               <div className="mt-4 flex flex-wrap gap-2">
