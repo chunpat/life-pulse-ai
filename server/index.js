@@ -19,6 +19,11 @@ if (!globalThis.fetch) {
 
 require('dotenv').config();
 const sequelize = require('./config/database');
+const {
+  cleanupDuplicateUserUniqueIndexes,
+  getDatabaseSyncMode,
+  getDatabaseSyncOptions
+} = require('./utils/databaseSync');
 
 const app = express();
 
@@ -70,8 +75,17 @@ const RewardProfile = require('./models/RewardProfile');
 const RewardLedger = require('./models/RewardLedger');
 const UserBadge = require('./models/UserBadge');
 const { ensureOfficialPlanTemplates } = require('./services/officialPlanService');
+const syncMode = getDatabaseSyncMode();
 
-sequelize.sync({ alter: true })
+cleanupDuplicateUserUniqueIndexes(sequelize)
+  .then((removedIndexes) => {
+    if (removedIndexes.length) {
+      console.log(`Removed duplicate user indexes: ${removedIndexes.join(', ')}`);
+    }
+
+    console.log(`Database sync mode: ${syncMode}`);
+    return sequelize.sync(getDatabaseSyncOptions());
+  })
   .then(async () => {
     await ensureOfficialPlanTemplates();
     console.log('Database connected and synced');

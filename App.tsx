@@ -9,7 +9,7 @@ import Auth from './components/Auth';
 import { Layout } from './components/Layout';
 import InviteTools from './components/InviteTools';
 import { storageService } from './services/storageService';
-import { createGoal, deleteGoal, fetchGoals, pauseGoal, restartGoal, resumeGoal, setPrimaryGoal } from './services/goalService';
+import { createGoal, deleteGoal, fetchGoals, pauseGoal, resumeGoal, setPrimaryGoal } from './services/goalService';
 import { fetchRewardBadges, fetchRewardLedger, fetchRewardProfile } from './services/rewardService';
 
 const GUEST_STORAGE_USER = 'guest_user_v1';
@@ -277,21 +277,6 @@ const App: React.FC = () => {
     }
   }, [refreshGoals, user]);
 
-  const handleRestartGoal = useCallback(async (goalId: string) => {
-    if (!user || user.status !== 'authenticated') return;
-
-    setIsGoalMutating(true);
-    try {
-      await restartGoal(goalId);
-      await refreshGoals();
-    } catch (error) {
-      console.error('Restart goal error:', error);
-      throw error;
-    } finally {
-      setIsGoalMutating(false);
-    }
-  }, [refreshGoals, user]);
-
   const handleSetPrimaryGoal = useCallback(async (goalId: string) => {
     if (!user || user.status !== 'authenticated') return;
 
@@ -371,7 +356,6 @@ const App: React.FC = () => {
           onCloseComposer={handleCloseLoggerComposer}
           onCreateGoal={handleCreateGoal}
           onPauseGoal={handlePauseGoal}
-          onRestartGoal={handleRestartGoal}
           onResumeGoal={handleResumeGoal}
           onSetPrimaryGoal={handleSetPrimaryGoal}
           onDeleteGoal={handleDeleteGoal}

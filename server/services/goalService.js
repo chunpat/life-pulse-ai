@@ -487,6 +487,35 @@ const resumeGoal = async (userId, goalId, options = {}) => {
   return Goal.findOne({ where: { id: goalId, userId }, ...txOptions });
 };
 
+const reactivateFailedGoal = async (goal, userId, options = {}, config = {}) => {
+  const txOptions = getTransactionOptions(options);
+  const restartLimit = getGoalRestartLimit(goal);
+  const restartCount = getGoalRestartCount(goal);
+  const nextRestartCount = config.incrementRestartCount === false
+    ? restartCount
+    : restartCount + 1;
+
+  await goal.update({
+    status: 'active',
+    startedAt: Date.now(),
+    currentStreak: 0,
+    lastCheckInDate: null,
+    completedAt: null,
+    metadata: buildGoalMetadata(goal, {
+      interruptedAt: null,
+      restartedAt: Date.now(),
+      restartCount: nextRestartCount,
+      restartLimit
+    })
+  }, txOptions);
+
+  if (config.ensurePrimary !== false) {
+    await ensurePrimaryRewardGoal(userId, goal.id, options);
+  }
+
+  return Goal.findOne({ where: { id: goal.id, userId }, ...txOptions });
+};
+
 const restartGoal = async (userId, goalId, options = {}) => {
   const txOptions = getTransactionOptions(options);
   const goal = await Goal.findOne({ where: { id: goalId, userId }, ...txOptions });
@@ -506,29 +535,7 @@ const restartGoal = async (userId, goalId, options = {}) => {
     throw new Error('该计划的重启次数已用完');
   }
 
-  await GoalCheckin.destroy({
-    where: { goalId: goal.id, userId },
-    ...txOptions
-  });
-
-  await goal.update({
-    status: 'active',
-    startedAt: Date.now(),
-    completedDays: 0,
-    currentStreak: 0,
-    lastCheckInDate: null,
-    completedAt: null,
-    metadata: buildGoalMetadata(goal, {
-      interruptedAt: null,
-      restartedAt: Date.now(),
-      restartCount: restartCount + 1,
-      restartLimit
-    })
-  }, txOptions);
-
-  await ensurePrimaryRewardGoal(userId, goal.id, options);
-
-  return Goal.findOne({ where: { id: goalId, userId }, ...txOptions });
+  return reactivateFailedGoal(goal, userId, options);
 };
 
 const completeGoal = async (userId, goalId, options = {}) => {
@@ -646,9 +653,14 @@ const getGoalCheckins = async (userId, goalId, options = {}) => {
 const applyLogGoalCheckin = async (userId, logData, options = {}) => {
   const txOptions = getTransactionOptions(options);
   const activeGoals = await refreshActiveGoals(userId, options);
+  const failedGoals = await Goal.findAll({
+    where: { userId, status: 'failed' },
+    order: [['createdAt', 'DESC']],
+    ...txOptions
+  });
   const logContext = buildLogMatchContext(logData);
 
-  if (!activeGoals.length) {
+  if (!activeGoals.length && !failedGoals.length) {
     return {
       goals: [],
       checkins: [],
@@ -659,8 +671,28 @@ const applyLogGoalCheckin = async (userId, logData, options = {}) => {
 
   const dateKey = formatDateKey(options.settlementTimestamp || Date.now());
   const createdGoalCheckins = [];
+  const candidateGoals = [...activeGoals];
 
-  for (const activeGoal of activeGoals) {
+  for (const failedGoal of failedGoals) {
+    if (!doesGoalMatchLog(failedGoal, logContext)) {
+      continue;
+    }
+
+    const restartLimit = getGoalRestartLimit(failedGoal);
+    const restartCount = getGoalRestartCount(failedGoal);
+
+    if (restartCount >= restartLimit) {
+      continue;
+    }
+
+    const restartedGoal = await reactivateFailedGoal(failedGoal, userId, options, {
+      ensurePrimary: false
+    });
+
+    candidateGoals.push(restartedGoal);
+  }
+
+  for (const activeGoal of candidateGoals) {
     if (!doesGoalMatchLog(activeGoal, logContext)) {
       continue;
     }
@@ -720,7 +752,7 @@ const applyLogGoalCheckin = async (userId, logData, options = {}) => {
 
   if (!createdGoalCheckins.length) {
     return {
-      goals: activeGoals,
+      goals: candidateGoals,
       checkins: [],
       goalEvents: [],
       logData

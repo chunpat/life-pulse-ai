@@ -62,7 +62,6 @@ interface GoalPlannerProps {
   isGoalActionLoading?: boolean;
   onCreateGoal: (goalInput: GoalCreateInput) => Promise<void>;
   onPauseGoal: (goalId: string) => Promise<void>;
-  onRestartGoal: (goalId: string) => Promise<void>;
   onResumeGoal: (goalId: string) => Promise<void>;
   onSetPrimaryGoal: (goalId: string) => Promise<void>;
   onDeleteGoal: (goalId: string) => Promise<void>;
@@ -74,7 +73,6 @@ const GoalPlanner: React.FC<GoalPlannerProps> = ({
   isGoalActionLoading = false,
   onCreateGoal,
   onPauseGoal,
-  onRestartGoal,
   onResumeGoal,
   onSetPrimaryGoal,
   onDeleteGoal
@@ -198,14 +196,6 @@ const GoalPlanner: React.FC<GoalPlannerProps> = ({
   const handleResume = async (goalId: string) => {
     try {
       await onResumeGoal(goalId);
-    } catch (error) {
-      window.alert(error instanceof Error ? error.message : t('goals.operation_failed'));
-    }
-  };
-
-  const handleRestart = async (goalId: string) => {
-    try {
-      await onRestartGoal(goalId);
     } catch (error) {
       window.alert(error instanceof Error ? error.message : t('goals.operation_failed'));
     }
@@ -403,12 +393,10 @@ const GoalPlanner: React.FC<GoalPlannerProps> = ({
 
           <div className="space-y-3">
             {goalRecords.map(goal => {
-              const progressText = `${goal.completedDays}/${goal.totalDays}`;
               const rewardText = goal.rewardTitle || t('goals.no_reward');
               const statusTone = getStatusTone(goal.status);
-              const restartLimit = getGoalRestartLimit(goal);
-              const restartCount = getGoalRestartCount(goal);
               const remainingRestarts = getGoalRemainingRestarts(goal);
+              const isInterrupted = goal.status === 'failed';
 
               return (
                 <div
@@ -436,48 +424,48 @@ const GoalPlanner: React.FC<GoalPlannerProps> = ({
                             {t('goals.official_plan_badge')}
                           </span>
                         )}
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${isGoalStarted(goal) ? 'bg-slate-200 text-slate-700' : 'bg-sky-100 text-sky-700'}`}>
-                          {isGoalStarted(goal) ? t('goals.started_badge') : t('goals.not_started_badge')}
-                        </span>
+                        {!isInterrupted && (
+                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${isGoalStarted(goal) ? 'bg-slate-200 text-slate-700' : 'bg-sky-100 text-sky-700'}`}>
+                            {isGoalStarted(goal) ? t('goals.started_badge') : t('goals.not_started_badge')}
+                          </span>
+                        )}
                       </div>
                       <p className="mt-2 text-xs text-slate-500">
-                        {getGoalLabel(goal.goalType)} · {t('goals.progress_inline', { current: goal.completedDays, total: goal.totalDays })}
+                        {getGoalLabel(goal.goalType)} · {t(isInterrupted ? 'goals.interrupted_progress_inline' : 'goals.progress_inline', { current: goal.completedDays, total: goal.totalDays })}
                       </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        {goal.lastCheckInDate
-                          ? t('goals.last_checkin', { date: goal.lastCheckInDate })
-                          : t('goals.not_started_record')}
-                      </p>
-                      <p className="mt-2 text-xs text-slate-500 leading-relaxed">
-                        {goal.status === 'paused'
-                          ? t('goals.resume_detail')
-                          : goal.status === 'completed'
-                            ? t('goals.completed_hint', { days: goal.totalDays })
-                            : goal.status === 'failed'
-                              ? t('goals.failed_restart_hint')
-                              : t('goals.resume_hint')}
-                      </p>
-                      {goal.status === 'failed' && (
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
-                            {t('goals.restart_count_badge', { used: restartCount, total: restartLimit })}
-                          </span>
-                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${remainingRestarts > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
-                            {remainingRestarts > 0
-                              ? t('goals.restart_remaining_badge', { count: remainingRestarts })
-                              : t('goals.restart_exhausted_badge')}
-                          </span>
-                        </div>
+                      {isInterrupted ? (
+                        <>
+                          <p className="mt-2 text-xs text-slate-500 leading-relaxed">
+                            {t('goals.failed_restart_hint')}
+                          </p>
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${remainingRestarts > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
+                              {remainingRestarts > 0
+                                ? t('goals.restart_remaining_badge', { count: remainingRestarts })
+                                : t('goals.restart_exhausted_badge')}
+                            </span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {goal.lastCheckInDate
+                              ? t('goals.last_checkin', { date: goal.lastCheckInDate })
+                              : t('goals.not_started_record')}
+                          </p>
+                          <p className="mt-2 text-xs text-slate-500 leading-relaxed">
+                            {goal.status === 'paused'
+                              ? t('goals.resume_detail')
+                              : goal.status === 'completed'
+                                ? t('goals.completed_hint', { days: goal.totalDays })
+                                : t('goals.resume_hint')}
+                          </p>
+                          <p className="mt-2 text-xs text-amber-700 font-medium">
+                            {t('goals.reward_inline', { reward: rewardText })}
+                          </p>
+                        </>
                       )}
-                      {goal.status === 'failed' && (
-                        <p className="mt-2 text-xs text-slate-500 leading-relaxed">
-                          {t('goals.restart_rule_hint', { total: restartLimit })}
-                        </p>
-                      )}
-                      <p className="mt-2 text-xs text-amber-700 font-medium">
-                        {t('goals.reward_inline', { reward: rewardText })}
-                      </p>
-                      {goal.completionBadgeCode && (
+                      {!isInterrupted && goal.completionBadgeCode && (
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
                             {t('goals.completion_badge')}
@@ -515,16 +503,6 @@ const GoalPlanner: React.FC<GoalPlannerProps> = ({
                             className="px-3 py-2 rounded-xl bg-white text-xs font-bold text-slate-600 border border-slate-200 hover:border-amber-200 hover:text-amber-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                         >
                           {t('goals.resume')}
-                        </button>
-                      )}
-                      {goal.status === 'failed' && (
-                        <button
-                          type="button"
-                          onClick={() => handleRestart(goal.id)}
-                          disabled={isGoalActionLoading || remainingRestarts === 0}
-                          className={`px-3 py-2 rounded-xl text-xs font-bold border transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${remainingRestarts > 0 ? 'bg-white text-amber-700 border-amber-200 hover:bg-amber-50' : 'bg-slate-100 text-slate-400 border-slate-200'}`}
-                        >
-                          {remainingRestarts > 0 ? t('goals.restart') : t('goals.restart_exhausted_button')}
                         </button>
                       )}
                       <button
@@ -694,15 +672,15 @@ const ActiveGoalCard: React.FC<{
           }
         : undefined}
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
+      <div className="flex flex-col gap-3">
+        <div className="min-w-0 max-w-2xl">
           <h4 className="text-lg font-black tracking-tight text-white truncate">{goal.title}</h4>
           <p className="mt-1 text-sm text-slate-300 leading-relaxed">
             {isTodayCompleted ? t('goals.today_done') : t('goals.today_pending')}
           </p>
         </div>
 
-        <div className="flex gap-2 shrink-0">
+        <div className="flex flex-wrap gap-2">
           {!isPrimary && canSetPrimary && (
             <button
               type="button"

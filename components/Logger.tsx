@@ -63,7 +63,6 @@ interface LoggerProps {
   onCloseComposer: () => void;
   onCreateGoal: (goalInput: GoalCreateInput) => Promise<void>;
   onPauseGoal: (goalId: string) => Promise<void>;
-  onRestartGoal: (goalId: string) => Promise<void>;
   onResumeGoal: (goalId: string) => Promise<void>;
   onSetPrimaryGoal: (goalId: string) => Promise<void>;
   onDeleteGoal: (goalId: string) => Promise<void>;
@@ -83,7 +82,6 @@ const Logger: React.FC<LoggerProps> = ({
   onCloseComposer,
   onCreateGoal,
   onPauseGoal,
-  onRestartGoal,
   onResumeGoal,
   onSetPrimaryGoal,
   onDeleteGoal
@@ -521,7 +519,6 @@ const Logger: React.FC<LoggerProps> = ({
               isGoalActionLoading={isGoalActionLoading}
               onCreateGoal={onCreateGoal}
               onPauseGoal={onPauseGoal}
-              onRestartGoal={onRestartGoal}
               onResumeGoal={onResumeGoal}
               onSetPrimaryGoal={onSetPrimaryGoal}
               onDeleteGoal={onDeleteGoal}
@@ -878,10 +875,10 @@ const PlanFocusCard: React.FC<{
 
           <button
             type="button"
-            onClick={onOpenPlanner}
+            onClick={interruptedGoalsCount > 0 ? onOpenComposer : onOpenPlanner}
             className="shrink-0 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white hover:bg-slate-800 transition-colors"
           >
-            {t('logger.plan_secondary_cta')}
+            {interruptedGoalsCount > 0 ? t('logger.plan_primary_cta') : t('logger.plan_secondary_cta')}
           </button>
         </div>
       </div>

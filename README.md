@@ -53,6 +53,7 @@ DB_PORT=3306
 DB_USER=root
 DB_PASS=你的数据库密码
 DB_NAME=lifepulse_db
+DB_SYNC_MODE=safe
 
 # 阿里云通义千问 API Key
 DASHSCOPE_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx
@@ -61,6 +62,8 @@ QWEN_ENABLE_THINKING=false
 ```
 
 `qwen3.5-plus` 这类混合思考模型默认会先思考再回答。如果你用它来做日志解析、洞察和建议，建议保持 `QWEN_ENABLE_THINKING=false`，能明显降低返回延迟。
+
+数据库启动默认建议使用 `DB_SYNC_MODE=safe`。只有在你明确要让 Sequelize 自动修改表结构时，才临时改成 `alter`，否则 MySQL 上可能重复堆叠唯一索引。
 
 ### 3. 运行项目
 

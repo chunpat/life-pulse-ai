@@ -15,6 +15,11 @@ const RewardProfile = require('../models/RewardProfile');
 const RewardLedger = require('../models/RewardLedger');
 const UserBadge = require('../models/UserBadge');
 const { ensureOfficialPlanTemplates } = require('../services/officialPlanService');
+const {
+  cleanupDuplicateUserUniqueIndexes,
+  getDatabaseSyncMode,
+  getDatabaseSyncOptions
+} = require('../utils/databaseSync');
 const { createGoalForUser, applyLogGoalCheckin } = require('../services/goalService');
 const { issueBadge, postReward, settleLogRewards } = require('../services/rewardService');
 
@@ -368,7 +373,13 @@ const createBadgeGrant = async ({ userId, badgeConfig, officialPlansBySlug }, tr
 
 const main = async () => {
   try {
-    await sequelize.sync({ alter: true });
+    const removedIndexes = await cleanupDuplicateUserUniqueIndexes(sequelize);
+    if (removedIndexes.length) {
+      console.log(`Removed duplicate user indexes before seed: ${removedIndexes.join(', ')}`);
+    }
+
+    console.log(`Database sync mode: ${getDatabaseSyncMode()}`);
+    await sequelize.sync(getDatabaseSyncOptions());
     await ensureOfficialPlanTemplates();
 
     const transaction = await sequelize.transaction();
