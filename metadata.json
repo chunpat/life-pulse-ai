@@ -1,6 +1,6 @@
 {
-  "name": "LifePulse AI · 爱记录",
-  "description": "一个轻松的日常记录工具，帮你记下每一天，慢慢看见变化。",
+  "name": "掌控生活 · LifePulse AI",
+  "description": "一个支持生活记录、财务记账和计划安排的对话式生活助手。",
   "requestFramePermissions": [
     "microphone"
   ]

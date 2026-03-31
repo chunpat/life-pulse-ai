@@ -123,3 +123,19 @@ export const deleteFinanceRecord = async (id: string): Promise<void> => {
   const newRecords = records.filter(r => r.id !== id);
   saveLocalRecords(newRecords);
 };
+
+export const deleteFinanceRecordsByLogId = async (logId: string): Promise<void> => {
+  if (!logId) return;
+
+  const token = localStorage.getItem('lifepulse_token');
+
+  if (token) {
+    const records = await fetchFinanceRecords();
+    const linkedRecords = records.filter((record) => record.logId === logId && record.id);
+    await Promise.all(linkedRecords.map((record) => deleteFinanceRecord(record.id as string)));
+    return;
+  }
+
+  const records = getLocalRecords();
+  saveLocalRecords(records.filter((record) => record.logId !== logId));
+};

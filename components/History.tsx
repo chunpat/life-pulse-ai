@@ -54,7 +54,7 @@ const History: React.FC<HistoryProps> = ({ logs, goals, onDelete, onUpdate }) =>
     setIsReanalyzing(true);
     try {
       // 传递当前语言环境，确保重新解析时使用正确的语言
-      const parsed = await parseLifeLog(selectedLog.rawText, i18n?.language);
+      const parsed = await parseLifeLog(selectedLog.rawText, i18n?.language, 'log');
       
       // 更新关联的财务记录，确保使用原始日志的时间
       if (parsed.finance) {

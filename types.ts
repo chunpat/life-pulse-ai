@@ -5,6 +5,13 @@ export type GoalType = '7_DAY' | '21_DAY';
 export type GoalStatus = 'active' | 'paused' | 'completed' | 'failed';
 export type GoalRewardRole = 'tracking' | 'primary';
 export type GoalPlanScope = 'personal' | 'official';
+export type PlanType = 'reminder' | 'event';
+export type PlanStatus = 'pending' | 'completed' | 'cancelled';
+export type PlanSource = 'manual' | 'ai' | 'imported';
+export type PlanSyncTarget = 'none' | 'ios-reminder' | 'ios-calendar';
+export type PlanSyncState = 'local-only' | 'pending-sync' | 'synced' | 'conflict' | 'permission-denied' | 'failed';
+export type ChatMessageRole = 'user' | 'assistant';
+export type ChatMessageType = 'text' | 'confirmation';
 
 export interface LogGoalCheckin {
   goalId: string;
@@ -17,6 +24,86 @@ export interface GoalCreateInput {
   title?: string;
   rewardTitle?: string;
   officialPlanTemplateId?: string;
+}
+
+export interface Plan {
+  id: string;
+  userId: string;
+  title: string;
+  notes?: string | null;
+  planType: PlanType;
+  status: PlanStatus;
+  source: PlanSource;
+  startAt?: number | null;
+  endAt?: number | null;
+  dueAt?: number | null;
+  isAllDay: boolean;
+  timezone?: string | null;
+  reminderAt?: number | null;
+  syncTarget: PlanSyncTarget;
+  syncState: PlanSyncState;
+  externalId?: string | null;
+  externalContainerId?: string | null;
+  metadata?: Record<string, unknown>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface PlanCreateInput {
+  title: string;
+  notes?: string;
+  planType: PlanType;
+  source?: PlanSource;
+  startAt?: number | null;
+  endAt?: number | null;
+  dueAt?: number | null;
+  isAllDay?: boolean;
+  timezone?: string;
+  reminderAt?: number | null;
+  syncTarget?: PlanSyncTarget;
+  metadata?: Record<string, unknown>;
+}
+
+export interface PlanUpdateInput {
+  title?: string;
+  notes?: string | null;
+  planType?: PlanType;
+  status?: PlanStatus;
+  startAt?: number | null;
+  endAt?: number | null;
+  dueAt?: number | null;
+  isAllDay?: boolean;
+  timezone?: string | null;
+  reminderAt?: number | null;
+  syncTarget?: PlanSyncTarget;
+  syncState?: PlanSyncState;
+  externalId?: string | null;
+  externalContainerId?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface PlanListQuery {
+  status?: PlanStatus;
+  planType?: PlanType;
+  startDate?: string;
+  endDate?: string;
+  syncTarget?: PlanSyncTarget;
+  keyword?: string;
+  limit?: string;
+}
+
+export interface PlanParseResult {
+  title: string;
+  notes?: string;
+  planType: PlanType;
+  startAt?: number | null;
+  endAt?: number | null;
+  dueAt?: number | null;
+  isAllDay?: boolean;
+  reminderAt?: number | null;
+  syncTargetSuggestion?: PlanSyncTarget;
+  confidence?: number;
+  originalText?: string;
 }
 
 export interface User {
@@ -157,6 +244,27 @@ export interface LogEntry {
   updatedAt?: number;
 }
 
+export interface ChatMessage {
+  id: string;
+  userId: string;
+  role: ChatMessageRole;
+  content: string;
+  messageType: ChatMessageType;
+  timestamp: number;
+  metadata?: Record<string, unknown>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ChatMessageCreateInput {
+  id?: string;
+  role: ChatMessageRole;
+  content: string;
+  messageType?: ChatMessageType;
+  timestamp?: number;
+  metadata?: Record<string, unknown>;
+}
+
 export interface DaySummary {
   date: string;
   totalMinutes: number;
@@ -179,12 +287,16 @@ export interface FinanceRecord {
 }
 
 export interface ParseResult extends Partial<LogEntry> {
+  intent?: 'chat' | 'log' | 'plan' | 'finance';
+  assistantReply?: string;
+  plan?: PlanParseResult;
   finance?: FinanceRecord[];
 }
 
 export enum ViewMode {
   LOGGER = 'LOGGER',
   TIMELINE = 'TIMELINE',
+  PLAN = 'PLAN',
   ANALYTICS = 'ANALYTICS',
   FINANCE = 'FINANCE'
 }

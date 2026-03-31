@@ -2,10 +2,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { parseLifeLog, getSmartSuggestions } from '../services/qwenService';
-import { createFinanceRecord } from '../services/financeService';
+import { createFinanceRecord, deleteFinanceRecordsByLogId } from '../services/financeService';
 import { storageService } from '../services/storageService';
-import { Goal, GoalCreateInput, LogEntry, RewardProfile } from '../types';
+import { ChatMessage, Goal, GoalCreateInput, LogEntry, Plan, PlanCreateInput, RewardProfile } from '../types';
+import { formatMessageTime, shouldShowTimeLabel } from '../utils/formatMessageTime';
 import GoalPlanner from './GoalPlanner';
+import NoticeToast from './NoticeToast';
 
 // 兼容性 UUID 生成函数
 function generateUUID(): string {
@@ -25,6 +27,57 @@ const OFFICIAL_ACCENT_COLOR_MAP: Record<string, string> = {
   '#7c3aed': '#d97706',
   '#059669': '#c2410c'
 };
+
+const DRAFT_STORAGE_KEY = 'lifepulse_unconfirmed_draft';
+const DRAFT_STALE_HOURS = 24;
+const UNDO_WINDOW_MS = 5 * 60 * 1000;
+
+function persistUnconfirmedDraft(draft: NonNullable<ReturnType<typeof buildDraftPreview>>) {
+  try {
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify({
+      draft,
+      timestamp: Date.now()
+    }));
+  } catch (e) {
+    console.warn('Failed to persist draft', e);
+  }
+}
+
+function loadPersistedDraft(): ReturnType<typeof buildDraftPreview> | null {
+  try {
+    const stored = localStorage.getItem(DRAFT_STORAGE_KEY);
+    if (!stored) return null;
+    const { draft, timestamp } = JSON.parse(stored);
+    const ageHours = (Date.now() - timestamp) / (1000 * 60 * 60);
+    if (ageHours > DRAFT_STALE_HOURS) {
+      localStorage.removeItem(DRAFT_STORAGE_KEY);
+      return null;
+    }
+
+    const normalizedDraft = {
+      ...draft,
+      createdAt: typeof draft?.createdAt === 'number' ? draft.createdAt : timestamp
+    };
+
+    if (normalizedDraft.createdAt + UNDO_WINDOW_MS <= Date.now()) {
+      localStorage.removeItem(DRAFT_STORAGE_KEY);
+      return null;
+    }
+
+    return normalizedDraft;
+  } catch (e) {
+    console.warn('Failed to load persisted draft', e);
+    return null;
+  }
+}
+
+function clearPersistedDraft() {
+  try {
+    localStorage.removeItem(DRAFT_STORAGE_KEY);
+  } catch (e) {
+    console.warn('Failed to clear persisted draft', e);
+  }
+}
 
 const formatDateKey = (value: number | string | Date) => {
   const date = new Date(value);
@@ -49,19 +102,30 @@ const getLoggerGoalAccentColor = (goal: Goal) => {
   return '#f59e0b';
 };
 
+const isDraftExpired = (draft: ReturnType<typeof buildDraftPreview>, now = Date.now()) => {
+  return draft.createdAt + UNDO_WINDOW_MS <= now;
+};
+
 interface LoggerProps {
   onAddLog: (entry: LogEntry) => Promise<void>;
   onLogout: () => void;
   userId: string;
   isGuest?: boolean;
   logs: LogEntry[]; // Changed from logsCount to logs array
+  chatMessages: ChatMessage[];
   goals: Goal[];
   rewardProfile?: RewardProfile | null;
+  sidebarOpenRequestKey?: number;
   isComposerOpen: boolean;
   isGoalActionLoading?: boolean;
   onOpenComposer: () => void;
   onCloseComposer: () => void;
   onCreateGoal: (goalInput: GoalCreateInput) => Promise<void>;
+  onCreateChatMessage: (message: { id?: string; role: 'user' | 'assistant'; content: string; messageType?: 'text' | 'confirmation'; timestamp?: number; metadata?: Record<string, unknown> }) => Promise<void>;
+  onDeleteChatMessages: (messageIds: string[]) => Promise<void>;
+  onCreatePlan: (planInput: PlanCreateInput) => Promise<Plan | undefined>;
+  onDeleteLog: (logId: string) => Promise<void>;
+  onDeletePlan: (planId: string) => Promise<void>;
   onPauseGoal: (goalId: string) => Promise<void>;
   onResumeGoal: (goalId: string) => Promise<void>;
   onSetPrimaryGoal: (goalId: string) => Promise<void>;
@@ -74,13 +138,20 @@ const Logger: React.FC<LoggerProps> = ({
   userId,
   isGuest = false,
   logs,
+  chatMessages,
   goals,
   rewardProfile,
+  sidebarOpenRequestKey = 0,
   isComposerOpen,
   isGoalActionLoading = false,
   onOpenComposer,
   onCloseComposer,
   onCreateGoal,
+  onCreateChatMessage,
+  onDeleteChatMessages,
+  onCreatePlan,
+  onDeleteLog,
+  onDeletePlan,
   onPauseGoal,
   onResumeGoal,
   onSetPrimaryGoal,
@@ -88,11 +159,15 @@ const Logger: React.FC<LoggerProps> = ({
 }) => {
   const { t, i18n } = useTranslation();
   const [inputText, setInputText] = useState('');
+  const [draftParse, setDraftParse] = useState<ReturnType<typeof buildDraftPreview> | null>(null);
+  const [draftTriggerMessageId, setDraftTriggerMessageId] = useState<string | null>(null);
+  const [draftPendingMessageId, setDraftPendingMessageId] = useState<string | null>(null);
   const [suggestion, setSuggestion] = useState<{content: string, type: string, trigger: string} | null>(null);
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
+  const [showUndoConfirm, setShowUndoConfirm] = useState(false);
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
   const [currentLocation, setCurrentLocation] = useState<LogEntry['location']>(undefined);
   const [isUploading, setIsUploading] = useState(false);
@@ -100,10 +175,27 @@ const Logger: React.FC<LoggerProps> = ({
   const [isWeChat, setIsWeChat] = useState(false);
   const [wxReady, setWxReady] = useState(false);
   const [showShareOverlay, setShowShareOverlay] = useState(false);
+  const [showGoalDrawer, setShowGoalDrawer] = useState(false);
+  const [showTimelineDrawer, setShowTimelineDrawer] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState<'goals' | 'record-add'>('goals');
+  const [composerMode, setComposerMode] = useState<'chat' | 'record-add'>('chat');
+  const [imageDirectAnalyze, setImageDirectAnalyze] = useState(false);
+  const [showInlineKeyboard, setShowInlineKeyboard] = useState(false);
+  const [notice, setNotice] = useState<{ message: string; tone: 'success' | 'error' | 'info' } | null>(null);
+  const [expandedPendingMessageId, setExpandedPendingMessageId] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
   const recognitionRef = useRef<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const goalPlannerRef = useRef<HTMLDivElement>(null);
+  const inlineInputRef = useRef<HTMLInputElement>(null);
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+  const hasInitialAutoScrollRef = useRef(false);
+  const voiceTranscriptRef = useRef('');
+  const voiceDraftRef = useRef('');
+  const shouldRestartListeningRef = useRef(false);
+  const shouldSubmitVoiceOnEndRef = useRef(false);
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
 
   const activeGoals = goals.filter((goal) => goal.status === 'active');
   const primaryGoal = activeGoals.find((goal) => goal.rewardRole === 'primary') || activeGoals[0] || null;
@@ -111,233 +203,164 @@ const Logger: React.FC<LoggerProps> = ({
   const focusGoal = primaryGoal || goals.find((goal) => goal.status === 'paused') || null;
   const todayKey = formatDateKey(Date.now());
 
-  // Fetch Smart Suggestions
-  useEffect(() => {
-    if (isGuest || logs.length === 0) return;
+  const recentConversation = logs.slice(0, 6).reverse();
+  const recentChatMessages = chatMessages.slice(-12);
+  const timelineLogs = [...recentConversation].sort((a, b) => b.timestamp - a.timestamp);
+  const timelineGroups = buildTimelineGroups(timelineLogs);
+  const latestPendingPreviewId = [...recentChatMessages]
+    .reverse()
+    .find((message) => message.role === 'assistant' && message.metadata?.kind === 'pending_preview')?.id || null;
+  const latestUndoableConfirmationId = [...recentChatMessages]
+    .reverse()
+    .find((message) => {
+      if (message.role !== 'assistant' || message.messageType !== 'confirmation') return false;
+      return Number(message.metadata?.undoExpiresAt || 0) > currentTime;
+    })?.id || null;
+  const latestUndoableUserMessageId = [...recentChatMessages]
+    .reverse()
+    .find((message) => {
+      if (message.role !== 'user') return false;
+      return message.timestamp + UNDO_WINDOW_MS > currentTime;
+    })?.id || null;
+  const isCurrentDraftExpired = draftParse ? isDraftExpired(draftParse, currentTime) : false;
 
-    // Check localStorage to avoid spamming the API (limit to once per 4 hours)
+  useEffect(() => {
+    if (!sidebarOpenRequestKey) return;
+    setShowGoalDrawer(true);
+  }, [sidebarOpenRequestKey]);
+
+  useEffect(() => {
+    const persisted = loadPersistedDraft();
+    if (persisted && !draftParse) {
+      setDraftParse(persisted);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!logs.length) return;
+
+    const cachedSuggestion = localStorage.getItem('current_suggestion');
     const lastFetch = localStorage.getItem('last_suggestion_fetch');
-    const lastLang = localStorage.getItem('last_suggestion_lang');
     const now = Date.now();
 
-    // Cache hit only if time is valid AND language matches
-    if (lastFetch && (now - parseInt(lastFetch) < 4 * 60 * 60 * 1000) && lastLang === i18n.language) {
-      const savedSuggestion = localStorage.getItem('current_suggestion');
-      if (savedSuggestion) {
-        setSuggestion(JSON.parse(savedSuggestion));
+    if (cachedSuggestion && lastFetch && now - Number(lastFetch) < 4 * 60 * 60 * 1000) {
+      try {
+        setSuggestion(JSON.parse(cachedSuggestion));
+        return;
+      } catch (error) {
+        console.warn('Failed to read cached suggestion', error);
       }
-      return;
-    }
-    
-    // If we missed cache due to language mismatch, clear the current displayed suggestion immediately
-    // so user doesn't see the wrong language while loading
-    if (lastLang !== i18n.language) {
-       setSuggestion(null);
     }
 
+    let cancelled = false;
     const fetchSuggestion = async () => {
       try {
-        const res = await getSmartSuggestions(logs, i18n.language);
-        if (res.suggestions && res.suggestions.length > 0) {
-          const mainSuggestion = res.suggestions[0];
-          setSuggestion(mainSuggestion);
-          // Cache it
-          localStorage.setItem('last_suggestion_fetch', now.toString());
-          localStorage.setItem('last_suggestion_lang', i18n.language);
-          localStorage.setItem('current_suggestion', JSON.stringify(mainSuggestion));
+        const latestLogs = logs.slice(0, 5).map((item) => item.rawText).join('\n');
+        const nextSuggestion = await getSmartSuggestions(latestLogs, i18n.language);
+        if (!cancelled && nextSuggestion) {
+          setSuggestion(nextSuggestion);
+          localStorage.setItem('current_suggestion', JSON.stringify(nextSuggestion));
+          localStorage.setItem('last_suggestion_fetch', String(now));
         }
-      } catch (e) {
-
-        console.error("Failed to fetch suggestions", e);
+      } catch (error) {
+        console.warn('Failed to fetch smart suggestion', error);
       }
     };
-    
-    // Delay slightly to not block initial render
-    const timer = setTimeout(fetchSuggestion, 2000);
-    return () => clearTimeout(timer);
-  }, [logs.length, isGuest, i18n.language]);
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+    fetchSuggestion();
 
-    setIsUploading(true);
-    try {
-      const file = files[0];
-      const url = await storageService.uploadImage(file);
-      setUploadedImages(prev => [...prev, url]);
-    } catch (err) {
-      console.error("图片上传失败:", err);
-      alert("图片上传失败，请检查网络或配置");
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const captureLocation = () => {
-    setIsGettingLocation(true);
-
-    const handleSuccess = async (latInput: string | number, lngInput: string | number) => {
-      const latitude = typeof latInput === 'string' ? parseFloat(latInput) : latInput;
-      const longitude = typeof lngInput === 'string' ? parseFloat(lngInput) : lngInput;
-      
-      let locationName = "未知位置";
-      try {
-        // 使用后端代理进行逆地理编码，避免前端请求被微信拦截或跨域问题
-        const res = await fetch(`/api/wechat/reverse-geocode?lat=${latitude}&lng=${longitude}`);
-        const data = await res.json();
-        locationName = data.address || `位置 (${latitude.toFixed(2)}, ${longitude.toFixed(2)})`;
-      } catch (e) {
-        console.error("逆地理编码失败", e);
-        locationName = `位置 (${latitude.toFixed(2)}, ${longitude.toFixed(2)})`;
-      }
-
-      setCurrentLocation({ name: locationName, latitude, longitude });
-      setIsGettingLocation(false);
+    return () => {
+      cancelled = true;
     };
-
-    const handleError = (error: any) => {
-      console.error("获取位置失败:", error);
-      setIsGettingLocation(false);
-    };
-
-    // 优先使用微信 JS-SDK 定位
-    if (isWeChat && wxReady) {
-      const wx = (window as any).wx;
-      wx.getLocation({
-        type: 'gcj02', 
-        success: (res: any) => {
-          handleSuccess(res.latitude, res.longitude);
-        },
-        fail: (err: any) => {
-          // 微信失败后尝试 H5 定位作为后备
-          if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-              (pos) => handleSuccess(pos.coords.latitude, pos.coords.longitude),
-              handleError,
-              { enableHighAccuracy: true, timeout: 5000 }
-            );
-          } else {
-            handleError(err);
-          }
-        }
-      });
-      return;
-    }
-
-    // 标准 H5 定位
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => handleSuccess(pos.coords.latitude, pos.coords.longitude),
-        handleError,
-        { enableHighAccuracy: true, timeout: 5000 }
-      );
-    } else {
-      setIsGettingLocation(false);
-    }
-  };
+  }, [logs, i18n.language]);
 
   useEffect(() => {
-    // 检测是否在微信环境中
     const ua = window.navigator.userAgent.toLowerCase();
-    if (ua.indexOf('micromessenger') !== -1) {
-      setIsWeChat(true);
-    }
+    const inWeChat = /micromessenger/.test(ua);
+    setIsWeChat(inWeChat);
+    setWxReady(Boolean(inWeChat && (window as any).wx));
+  }, []);
 
-    // 微信 JS-SDK 初始化
-    if (ua.indexOf('micromessenger') !== -1 && (window as any).wx) {
-      const initWx = async () => {
-        try {
-          const res = await fetch(`/api/wechat/config?url=${encodeURIComponent(window.location.href.split('#')[0])}`);
-          const config = await res.json();
-          if (config.enabled) {
-            (window as any).wx.config({
-              debug: false, 
-              appId: config.appId,
-              timestamp: config.timestamp,
-              nonceStr: config.nonceStr,
-              signature: config.signature,
-              jsApiList: [
-                'startRecord', 
-                'stopRecord', 
-                'translateVoice', 
-                'onVoiceRecordEnd',
-                'getLocation',             // 添加定位接口
-                'updateAppMessageShareData',
-                'updateTimelineShareData',
-                'onMenuShareAppMessage',   // 兼容旧接口
-                'onMenuShareTimeline'      // 兼容旧接口
-              ]
-            });
-            (window as any).wx.ready(() => {
-              setWxReady(true);
-              
-              // 获取当前不带参数的完整 URL，确保与 JS 接口安全域名匹配
-              const currentUrl = window.location.href.split('#')[0];
-              
-              const shareData = {
-                title: t('logger.share_meta.title'),
-                desc: t('logger.share_meta.desc'),
-                link: currentUrl,
-                // 图片建议使用 300x300 及以上，绝对路径，且不能是透明背景的 PNG（白色背景更稳）
-                imgUrl: window.location.origin + '/pwa-512x512.png', 
-                success: function() {
-                  console.log('分享接口调用成功');
-                }
-              };
-              
-              const wx = (window as any).wx;
-              
-              // 必须严格按照微信官方要求，先调用新接口，再兼容旧接口
-              if (wx.updateAppMessageShareData) {
-                wx.updateAppMessageShareData(shareData);
-              }
-              if (wx.updateTimelineShareData) {
-                wx.updateTimelineShareData(shareData);
-              }
-              
-              // 即使是认证过的号，旧接口在某些老版本微信或特定环境下依然是生效的关键
-              if (wx.onMenuShareAppMessage) wx.onMenuShareAppMessage(shareData);
-              if (wx.onMenuShareTimeline) wx.onMenuShareTimeline(shareData);
-            });
-            (window as any).wx.error((err: any) => {
-              console.error('WeChat JS-SDK Error:', err);
-              // alert(`微信 SDK 错误: ${JSON.stringify(err)}`);
-              setWxReady(false);
-            });
-          }
-        } catch (e) {
-          console.error("WeChat JS-SDK init failed", e);
-        }
-      };
-      initWx();
-    }
+  useEffect(() => {
+    if (isWeChat) return;
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = false;
-      recognitionRef.current.interimResults = false;
-      recognitionRef.current.lang = i18n.language.startsWith('en') ? 'en-US' : 'zh-CN';
+    if (!SpeechRecognition) return;
 
-      recognitionRef.current.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        setInputText(prev => (prev + ' ' + transcript).trim());
-        setIsListening(false);
-        setPermissionDenied(false);
-      };
+    const recognition = new SpeechRecognition();
+    recognition.lang = i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
+    recognition.continuous = true;
+    recognition.interimResults = true;
 
-      recognitionRef.current.onerror = (event: any) => {
-        console.error("Speech recognition error", event.error);
-        setIsListening(false);
-        if (event.error === 'not-allowed' || event.error === 'permission-denied') {
-          setPermissionDenied(true);
+    recognition.onresult = (event: any) => {
+      let finalChunk = '';
+      let interimChunk = '';
+
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const transcript = event.results[index]?.[0]?.transcript || '';
+        if (!transcript) continue;
+
+        if (event.results[index].isFinal) {
+          finalChunk += transcript;
+        } else {
+          interimChunk += transcript;
         }
-      };
+      }
 
-      recognitionRef.current.onend = () => setIsListening(false);
-    }
-  }, [i18n.language, t]);
+      if (finalChunk) {
+        voiceTranscriptRef.current = `${voiceTranscriptRef.current} ${finalChunk}`.trim();
+      }
+
+      voiceDraftRef.current = `${voiceTranscriptRef.current} ${interimChunk}`.trim();
+      setInputText(voiceDraftRef.current);
+      setPermissionDenied(false);
+    };
+
+    recognition.onerror = (event: any) => {
+      shouldRestartListeningRef.current = false;
+      shouldSubmitVoiceOnEndRef.current = false;
+      if (event?.error === 'not-allowed' || event?.error === 'service-not-allowed') {
+        setPermissionDenied(true);
+      }
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      if (shouldRestartListeningRef.current) {
+        try {
+          recognition.start();
+          return;
+        } catch (error) {
+          console.error(error);
+        }
+      }
+
+      const finalTranscript = voiceDraftRef.current.trim();
+      const shouldSubmit = shouldSubmitVoiceOnEndRef.current;
+      shouldSubmitVoiceOnEndRef.current = false;
+      shouldRestartListeningRef.current = false;
+      setIsListening(false);
+
+      if (shouldSubmit && finalTranscript) {
+        voiceTranscriptRef.current = '';
+        voiceDraftRef.current = '';
+        const cleanedText = finalTranscript.replace(/[。，？！]$/, '');
+        void analyzeTextInput(cleanedText);
+        return;
+      }
+
+      voiceTranscriptRef.current = '';
+      voiceDraftRef.current = '';
+    };
+
+    recognitionRef.current = recognition;
+
+    return () => {
+      recognition.stop?.();
+      recognitionRef.current = null;
+    };
+  }, [i18n.language, isWeChat]);
 
   useEffect(() => {
     if (!isComposerOpen) return;
@@ -349,99 +372,427 @@ const Logger: React.FC<LoggerProps> = ({
     return () => window.clearTimeout(timer);
   }, [isComposerOpen]);
 
-  const toggleListening = () => {
-    // 重置权限错误状态，允许用户重试
-    if (permissionDenied) {
-      setPermissionDenied(false);
-    }
+  useEffect(() => {
+    if (isComposerOpen || !showInlineKeyboard) return;
 
-    // 优先使用微信 JS-SDK (针对 iOS 微信兼容性)
-    if (isWeChat && wxReady) {
-      const wx = (window as any).wx;
-      if (isListening) {
-        wx.stopRecord({
-          success: (res: any) => {
-            const localId = res.localId;
-            setIsListening(false);
-            wx.translateVoice({
-              localId,
-              isShowProgressTips: 1,
-              success: (res2: any) => {
-                const text = res2.translateResult;
-                if (text) {
-                  const cleanedText = text.replace(/[。，？！]$/, ''); // 移除微信识别自动加的句号
-                  setInputText(prev => (prev + ' ' + cleanedText).trim());
-                }
-              }
-            });
-          },
-          fail: (err: any) => {
-            console.error("Stop record failed", err);
-            setIsListening(false);
-          }
-        });
-      } else {
-        setIsListening(true);
-        wx.startRecord({
-          success: () => {
-            wx.onVoiceRecordEnd({
-              complete: (res: any) => {
-                const localId = res.localId;
-                setIsListening(false);
-                wx.translateVoice({
-                  localId,
-                  isShowProgressTips: 1,
-                  success: (res2: any) => {
-                    const text = res2.translateResult;
-                    if (text) {
-                      const cleanedText = text.replace(/[。，？！]$/, '');
-                      setInputText(prev => (prev + ' ' + cleanedText).trim());
-                    }
-                  }
-                });
-              }
-            });
-          },
-          cancel: () => {
-            setIsListening(false);
-            alert('您拒绝了授权录音');
-          },
-          fail: (err: any) => {
-            console.error("Start record failed", err);
-            setIsListening(false);
-            setPermissionDenied(true);
-          }
-        });
-      }
-      return;
-    }
+    const timer = window.setTimeout(() => {
+      inlineInputRef.current?.focus();
+    }, 80);
 
-    if (isListening) {
-      recognitionRef.current?.stop();
-    } else {
-      setIsListening(true);
-      try {
-        recognitionRef.current?.start();
-      } catch (e) {
-        console.error(e);
-        setIsListening(false);
-      }
-    }
+    return () => window.clearTimeout(timer);
+  }, [isComposerOpen, showInlineKeyboard]);
+
+  useEffect(() => {
+    if (!isListening) return;
+
+    const handleGlobalRelease = () => {
+      stopVoiceInputAndSubmit();
+    };
+
+    window.addEventListener('touchend', handleGlobalRelease);
+    window.addEventListener('touchcancel', handleGlobalRelease);
+    window.addEventListener('mouseup', handleGlobalRelease);
+
+    return () => {
+      window.removeEventListener('touchend', handleGlobalRelease);
+      window.removeEventListener('touchcancel', handleGlobalRelease);
+      window.removeEventListener('mouseup', handleGlobalRelease);
+    };
+  }, [isListening]);
+
+  useEffect(() => {
+    const scrollBehavior = hasInitialAutoScrollRef.current ? 'smooth' : 'auto';
+    const timer = window.setTimeout(() => {
+      chatBottomRef.current?.scrollIntoView({ behavior: scrollBehavior, block: 'end' });
+      hasInitialAutoScrollRef.current = true;
+    }, 80);
+
+    return () => window.clearTimeout(timer);
+  }, [recentChatMessages.length, draftParse, uploadedImages.length, isProcessing, isListening, inputText, showInlineKeyboard]);
+
+  useEffect(() => {
+    if (!notice) return;
+
+    const timer = window.setTimeout(() => {
+      setNotice(null);
+    }, 2600);
+
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
+  useEffect(() => {
+    setCurrentTime(Date.now());
+    const timer = window.setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 30000);
+
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    setExpandedPendingMessageId(latestPendingPreviewId);
+  }, [latestPendingPreviewId]);
+
+  const showNotice = (message: string, tone: 'success' | 'error' | 'info' = 'info') => {
+    setNotice({ message, tone });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputText.trim() || isProcessing) return;
+  const analyzeTextInput = async (text: string, options?: { openComposer?: boolean }) => {
+    const normalizedText = text.trim();
+    if (!normalizedText || isProcessing) return;
 
-    // 游客模式限制：限记 3 条
     if (isGuest && logs.length >= 3) {
       setShowLimitModal(true);
       return;
     }
 
+    if (options?.openComposer) {
+      onOpenComposer();
+    }
+
+    // 如果有未确认的预览，转成待处理消息保留在对话中
+      if (draftParse) {
+        const pendingContent = draftParse.kind === 'plan'
+          ? t('logger.pending_plan_preview', { title: draftParse.summary })
+          : draftParse.kind === 'finance'
+            ? t('logger.pending_finance_preview', { count: draftParse.parsed.finance?.length })
+            : t('logger.pending_log_preview', { activity: draftParse.summary });
+        const pendingMsgId = generateUUID();
+        void onCreateChatMessage({
+          id: pendingMsgId,
+          role: 'assistant',
+          content: pendingContent,
+          messageType: 'text',
+          timestamp: Date.now(),
+          metadata: { kind: 'pending_preview', draftData: draftParse, triggerMessageId: draftTriggerMessageId }
+        });
+        setDraftPendingMessageId(pendingMsgId);
+        setExpandedPendingMessageId(pendingMsgId);
+      }
+
+    setInputText(normalizedText);
+    setDraftParse(null);
+    setDraftTriggerMessageId(null);
+    clearPersistedDraft();
+    setIsProcessing(true);
+    const userMsgId = generateUUID();
+    void onCreateChatMessage({
+      id: userMsgId,
+      role: 'user',
+      content: normalizedText,
+      messageType: 'text',
+      timestamp: Date.now(),
+      metadata: {
+        source: options?.openComposer ? 'composer' : 'chat'
+      }
+    });
+
+    try {
+      const parsed = await parseLifeLog(
+        normalizedText,
+        i18n.language,
+        'auto',
+        recentChatMessages.slice(-6).map((message) => ({
+          role: message.role,
+          content: message.content
+        }))
+      );
+
+      if (parsed.intent === 'chat') {
+        await onCreateChatMessage({
+          id: generateUUID(),
+          role: 'assistant',
+          content: parsed.assistantReply || (i18n.language.startsWith('zh') ? '我在，继续说。' : 'I am here. Go on.'),
+          messageType: 'text',
+          timestamp: Date.now(),
+          metadata: {
+            kind: 'chat'
+          }
+        });
+        setInputText('');
+        setDraftParse(null);
+        return;
+      }
+
+      const preview = buildDraftPreview(parsed, normalizedText);
+      persistUnconfirmedDraft(preview);
+      setDraftParse(preview);
+      setDraftTriggerMessageId(userMsgId);
+    } catch (error) {
+      console.error(error);
+      showNotice(t('logger.parse_failed', '解析失败，已按普通记录保存'), 'error');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    try {
+      const imageUrl = await storageService.uploadImage(file);
+      setUploadedImages((prev) => [...prev, imageUrl]);
+      setImageDirectAnalyze(false);
+    } catch (error) {
+      console.error(error);
+      showNotice(t('logger.image_upload_failed', '图片上传失败，请重试'), 'error');
+    } finally {
+      setIsUploading(false);
+      event.target.value = '';
+    }
+  };
+
+  const captureLocation = async () => {
+    if (!navigator.geolocation) {
+      showNotice(t('logger.location_failed', '当前设备不支持定位'), 'error');
+      return;
+    }
+
+    setIsGettingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const latitude = position.coords.latitude;
+        const longitude = position.coords.longitude;
+        setCurrentLocation({
+          name: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+          latitude,
+          longitude
+        });
+        setIsGettingLocation(false);
+      },
+      (error) => {
+        console.error(error);
+        setIsGettingLocation(false);
+        showNotice(t('logger.location_failed', '定位失败，请检查权限'), 'error');
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+    );
+  };
+
+  const startVoiceInput = (event?: React.TouchEvent | React.MouseEvent) => {
+    event?.preventDefault();
+    event?.stopPropagation();
+
+    if (isListening || isProcessing) return;
+
+    setPermissionDenied(false);
+    setDraftParse(null);
+    clearPersistedDraft();
+    setShowInlineKeyboard(false);
+    setInputText('');
+    voiceTranscriptRef.current = '';
+    voiceDraftRef.current = '';
+    shouldSubmitVoiceOnEndRef.current = false;
+
+    if (isWeChat) {
+      const wx = (window as any).wx;
+      if (!wx) {
+        setPermissionDenied(true);
+        return;
+      }
+
+      setIsListening(true);
+      wx.startRecord({
+        success: () => {
+          wx.onVoiceRecordEnd({
+            complete: (res: any) => {
+              const localId = res.localId;
+              setIsListening(false);
+              wx.translateVoice({
+                localId,
+                isShowProgressTips: 1,
+                success: (response: any) => {
+                  const text = response.translateResult;
+                  if (text) {
+                    const cleanedText = text.replace(/[。，？！]$/, '');
+                    setInputText(cleanedText);
+                    void analyzeTextInput(cleanedText);
+                  }
+                }
+              });
+            }
+          });
+        },
+        cancel: () => {
+          setIsListening(false);
+          showNotice('您拒绝了授权录音', 'error');
+        },
+        fail: (error: any) => {
+          console.error('Start record failed', error);
+          setIsListening(false);
+          setPermissionDenied(true);
+        }
+      });
+      return;
+    }
+
+    shouldRestartListeningRef.current = true;
+    setIsListening(true);
+    try {
+      recognitionRef.current?.start();
+    } catch (error) {
+      console.error(error);
+      shouldRestartListeningRef.current = false;
+      setIsListening(false);
+    }
+  };
+
+  const stopVoiceInputAndSubmit = (event?: React.TouchEvent | React.MouseEvent) => {
+    event?.preventDefault();
+    event?.stopPropagation();
+
+    if (!isListening || isProcessing) return;
+
+    if (isWeChat) {
+      const wx = (window as any).wx;
+      if (!wx) {
+        setIsListening(false);
+        return;
+      }
+
+      wx.stopRecord({
+        success: (res: any) => {
+          const localId = res.localId;
+          setIsListening(false);
+          wx.translateVoice({
+            localId,
+            isShowProgressTips: 1,
+            success: (response: any) => {
+              const text = response.translateResult;
+              if (text) {
+                const cleanedText = text.replace(/[。，？！]$/, '');
+                setInputText(cleanedText);
+                void analyzeTextInput(cleanedText);
+              }
+            },
+            fail: (error: any) => {
+              console.error('Stop record failed', error);
+            }
+          });
+        },
+        fail: (error: any) => {
+          console.error('Stop record failed', error);
+          setIsListening(false);
+        }
+      });
+      return;
+    }
+
+    shouldRestartListeningRef.current = false;
+    shouldSubmitVoiceOnEndRef.current = true;
+    recognitionRef.current?.stop();
+  };
+
+  const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
+    e?.preventDefault();
+    await analyzeTextInput(inputText);
+  };
+
+  const handleOpenInlineKeyboard = () => {
+    if (isListening) {
+      stopVoiceInputAndSubmit();
+      return;
+    }
+
+    // 如果有未确认的预览，转成待处理消息保留在对话中
+    if (draftParse) {
+      const pendingContent = draftParse.kind === 'plan'
+        ? t('logger.pending_plan_preview', { title: draftParse.summary })
+        : draftParse.kind === 'finance'
+          ? t('logger.pending_finance_preview', { count: draftParse.parsed.finance?.length })
+          : t('logger.pending_log_preview', { activity: draftParse.summary });
+      const pendingMsgId = generateUUID();
+      void onCreateChatMessage({
+        id: pendingMsgId,
+        role: 'assistant',
+        content: pendingContent,
+        messageType: 'text',
+        timestamp: Date.now(),
+        metadata: { kind: 'pending_preview', draftData: draftParse, triggerMessageId: draftTriggerMessageId }
+      });
+      setDraftPendingMessageId(pendingMsgId);
+      // Auto expand the newly created pending preview
+      setExpandedPendingMessageId(pendingMsgId);
+    }
+
+    setShowInlineKeyboard(true);
+    setDraftParse(null);
+    clearPersistedDraft();
+    window.setTimeout(() => {
+      inlineInputRef.current?.focus();
+    }, 0);
+  };
+
+  const handleConfirmDraft = async () => {
+    if (!draftParse || isProcessing) return;
+
+    if (isDraftExpired(draftParse)) {
+      setDraftParse(null);
+      setDraftTriggerMessageId(null);
+      setDraftPendingMessageId(null);
+      clearPersistedDraft();
+      showNotice(t('logger.preview_expired'), 'error');
+      return;
+    }
+
     setIsProcessing(true);
     try {
-      const parsed = await parseLifeLog(inputText, i18n.language);
+      const parsed = draftParse.parsed;
+
+      if (parsed.intent === 'plan' && parsed.plan) {
+        if (isGuest) {
+          showNotice(t('plans.login_required'), 'error');
+          return;
+        }
+
+        const createdPlan = await onCreatePlan({
+          title: parsed.plan.title || inputText,
+          notes: parsed.plan.notes,
+          planType: parsed.plan.planType,
+          source: 'ai',
+          startAt: parsed.plan.startAt ?? null,
+          endAt: parsed.plan.endAt ?? null,
+          dueAt: parsed.plan.dueAt ?? null,
+          isAllDay: parsed.plan.isAllDay ?? false,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          reminderAt: parsed.plan.reminderAt ?? null,
+          syncTarget: parsed.plan.syncTargetSuggestion || 'none',
+          metadata: {
+            originalText: draftParse.originalText,
+            location: currentLocation || null,
+            images: uploadedImages
+          }
+        });
+
+        if (draftPendingMessageId) {
+          await onDeleteChatMessages([draftPendingMessageId]);
+        }
+
+        const confirmationTimestamp = Date.now();
+
+        void onCreateChatMessage({
+          id: generateUUID(),
+          role: 'assistant',
+          content: t('logger.chat_saved_plan', { title: parsed.plan.title || inputText }),
+          messageType: 'confirmation',
+          timestamp: confirmationTimestamp,
+          metadata: {
+            kind: 'plan',
+            undoEntityType: 'plan',
+            undoEntityId: createdPlan?.id,
+            undoUserMessageId: draftTriggerMessageId,
+            undoExpiresAt: confirmationTimestamp + UNDO_WINDOW_MS
+          }
+        });
+
+        resetComposerState();
+        setDraftPendingMessageId(null);
+        setDraftTriggerMessageId(null);
+        showNotice(t('plans.created_from_text'), 'success');
+        return;
+      }
 
       // 生成统一的 ID，确保 Log 和 Finance 使用同一个 ID 关联
       const newLogId = generateUUID();
@@ -460,8 +811,8 @@ const Logger: React.FC<LoggerProps> = ({
         id: newLogId,
         userId, 
         timestamp: Date.now(),
-        rawText: inputText,
-        activity: parsed.activity || inputText,
+        rawText: draftParse.originalText,
+        activity: parsed.activity || draftParse.originalText,
         category: (parsed.category as any) || 'Other',
         durationMinutes: parsed.durationMinutes || 0,
         mood: parsed.mood || '平静',
@@ -471,126 +822,837 @@ const Logger: React.FC<LoggerProps> = ({
       };
 
       await onAddLog(newEntry);
-      setInputText('');
-      setUploadedImages([]);
-      setCurrentLocation(undefined);
-      onCloseComposer();
+      if (draftPendingMessageId) {
+        await onDeleteChatMessages([draftPendingMessageId]);
+      }
+      const confirmationTimestamp = Date.now();
+      void onCreateChatMessage({
+        id: generateUUID(),
+        role: 'assistant',
+        content: parsed.finance && parsed.finance.length > 0
+          ? t('logger.chat_saved_finance', { count: parsed.finance.length, activity: parsed.activity || draftParse.originalText })
+          : t('logger.thread_saved_format', { activity: parsed.activity || draftParse.originalText }),
+        messageType: 'confirmation',
+        timestamp: confirmationTimestamp,
+        metadata: {
+          kind: parsed.finance && parsed.finance.length > 0 ? 'finance' : 'log',
+          undoEntityType: 'log',
+          undoEntityId: newLogId,
+          undoUserMessageId: draftTriggerMessageId,
+          undoExpiresAt: confirmationTimestamp + UNDO_WINDOW_MS
+        }
+      });
+      resetComposerState();
+      setDraftPendingMessageId(null);
+      setDraftTriggerMessageId(null);
     } catch (e) {
       console.error(e);
-      alert(t('logger.parse_failed', '解析失败，已按普通记录保存')); 
+      showNotice(t('logger.parse_failed', '解析失败，已按普通记录保存'), 'error');
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const handleQuickCompose = (text?: string) => {
-    if (text) {
-      setInputText(text);
+  const handleRestorePendingDraft = (draftData: NonNullable<ReturnType<typeof buildDraftPreview>>) => {
+    if (isDraftExpired(draftData)) {
+      showNotice(t('logger.preview_expired'), 'error');
+      return;
     }
+
+    persistUnconfirmedDraft(draftData);
+    setDraftParse(draftData);
+    setShowInlineKeyboard(false);
     onOpenComposer();
+    // 滚动到输入区域
+    setTimeout(() => {
+      chatBottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }, 100);
+  };
+
+  const handleUndoConfirmation = async (message: ChatMessage) => {
+    const undoEntityType = typeof message.metadata?.undoEntityType === 'string' ? message.metadata.undoEntityType : null;
+    const undoEntityId = typeof message.metadata?.undoEntityId === 'string' ? message.metadata.undoEntityId : null;
+    const undoUserMessageId = typeof message.metadata?.undoUserMessageId === 'string' ? message.metadata.undoUserMessageId : null;
+    const undoExpiresAt = Number(message.metadata?.undoExpiresAt || 0);
+
+    if (!undoEntityType || !undoEntityId || undoExpiresAt <= Date.now()) {
+      showNotice(t('logger.undo_expired'), 'error');
+      return;
+    }
+
+    try {
+      if (undoEntityType === 'plan') {
+        await onDeletePlan(undoEntityId);
+      }
+
+      if (undoEntityType === 'log') {
+        await deleteFinanceRecordsByLogId(undoEntityId);
+        await onDeleteLog(undoEntityId);
+      }
+
+      await onDeleteChatMessages([message.id, undoUserMessageId].filter(Boolean) as string[]);
+      showNotice(t('logger.undo_success'), 'success');
+    } catch (error) {
+      console.error(error);
+      showNotice(t('logger.undo_failed'), 'error');
+    }
+  };
+
+  const handleUndoUserMessage = async (messageId: string) => {
+    const startIndex = recentChatMessages.findIndex((message) => message.id === messageId);
+    if (startIndex === -1) {
+      showNotice(t('logger.undo_failed'), 'error');
+      return;
+    }
+
+    const affectedMessages = recentChatMessages.slice(startIndex);
+    const expired = affectedMessages[0]?.timestamp + UNDO_WINDOW_MS <= Date.now();
+    if (expired) {
+      showNotice(t('logger.undo_expired'), 'error');
+      return;
+    }
+
+    try {
+      const confirmationMessages = affectedMessages.filter(
+        (message) => message.role === 'assistant' && message.messageType === 'confirmation'
+      );
+
+      for (const confirmationMessage of confirmationMessages) {
+        const undoEntityType = typeof confirmationMessage.metadata?.undoEntityType === 'string'
+          ? confirmationMessage.metadata.undoEntityType
+          : null;
+        const undoEntityId = typeof confirmationMessage.metadata?.undoEntityId === 'string'
+          ? confirmationMessage.metadata.undoEntityId
+          : null;
+
+        if (!undoEntityType || !undoEntityId) continue;
+
+        if (undoEntityType === 'plan') {
+          await onDeletePlan(undoEntityId);
+        }
+
+        if (undoEntityType === 'log') {
+          await deleteFinanceRecordsByLogId(undoEntityId);
+          await onDeleteLog(undoEntityId);
+        }
+      }
+
+      if (draftTriggerMessageId === messageId) {
+        setDraftParse(null);
+        setDraftTriggerMessageId(null);
+        setDraftPendingMessageId(null);
+        clearPersistedDraft();
+      }
+
+      await onDeleteChatMessages(affectedMessages.map((message) => message.id));
+      showNotice(t('logger.undo_success'), 'success');
+    } catch (error) {
+      console.error(error);
+      showNotice(t('logger.undo_failed'), 'error');
+    }
+  };
+
+  const handleCancelDraft = () => {
+    const messageIdsToDelete: string[] = [];
+    if (draftTriggerMessageId) {
+      messageIdsToDelete.push(draftTriggerMessageId);
+    }
+    if (draftPendingMessageId) {
+      messageIdsToDelete.push(draftPendingMessageId);
+    }
+    if (messageIdsToDelete.length > 0) {
+      onDeleteChatMessages(messageIdsToDelete);
+    }
+    setDraftParse(null);
+    setDraftTriggerMessageId(null);
+    setDraftPendingMessageId(null);
+    clearPersistedDraft();
+  };
+
+  const handleQuickCompose = (text?: string) => {
+    // First cancel the current draft to remove trigger and pending messages
+    if (draftParse) {
+      const messageIdsToDelete: string[] = [];
+      if (draftTriggerMessageId) {
+        messageIdsToDelete.push(draftTriggerMessageId);
+      }
+      if (draftPendingMessageId) {
+        messageIdsToDelete.push(draftPendingMessageId);
+      }
+      if (messageIdsToDelete.length > 0) {
+        onDeleteChatMessages(messageIdsToDelete);
+      }
+      setDraftParse(null);
+      setDraftTriggerMessageId(null);
+      setDraftPendingMessageId(null);
+      clearPersistedDraft();
+    }
+
+    setComposerMode('chat');
+    setInputText(text || '');
+    setShowInlineKeyboard(true);
+    onCloseComposer();
+  };
+
+  const handleOpenRecordAdd = () => {
+    setSidebarTab('record-add');
+    setShowGoalDrawer(true);
+  };
+
+  const handleOpenRecordAddComposer = () => {
+    setComposerMode('record-add');
+    setShowGoalDrawer(false);
+    onOpenComposer();
+  };
+
+  const handleTimelineTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    const touch = event.touches[0];
+    touchStartXRef.current = touch.clientX;
+    touchStartYRef.current = touch.clientY;
+  };
+
+  const handleTimelineTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
+    const startX = touchStartXRef.current;
+    const startY = touchStartYRef.current;
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+
+    if (startX === null || startY === null) return;
+
+    const touch = event.changedTouches[0];
+    const deltaX = touch.clientX - startX;
+    const deltaY = touch.clientY - startY;
+
+    if (Math.abs(deltaY) > 60 || Math.abs(deltaX) < 70) return;
+
+    if (!showTimelineDrawer && startX >= window.innerWidth - 56 && deltaX < -70) {
+      setShowTimelineDrawer(true);
+      return;
+    }
+
+    if (!showTimelineDrawer && deltaX < -110) {
+      setShowTimelineDrawer(true);
+      return;
+    }
+
+    if (showTimelineDrawer && deltaX > 70) {
+      setShowTimelineDrawer(false);
+    }
+  };
+
+  const handleImageFlowAction = async () => {
+    if (imageDirectAnalyze) {
+      await analyzeTextInput(t('logger.image_direct_prompt'));
+      return;
+    }
+
+    handleQuickCompose('');
   };
 
   const handleCloseComposer = () => {
     if (isProcessing) return;
+    setDraftParse(null);
+    clearPersistedDraft();
     onCloseComposer();
   };
 
-  const scrollToPlanner = () => {
-    goalPlannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const resetComposerState = () => {
+    setInputText('');
+    setUploadedImages([]);
+    setCurrentLocation(undefined);
+    setDraftParse(null);
+    clearPersistedDraft();
+    setShowInlineKeyboard(false);
+    onCloseComposer();
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {!isGuest && (
-        <>
-          <PlanFocusCard
-            goal={focusGoal}
-            activeGoalsCount={activeGoals.length}
-            interruptedGoalsCount={interruptedGoalsCount}
-            rewardProfile={rewardProfile}
-            todayKey={todayKey}
-            onOpenComposer={() => handleQuickCompose()}
-            onOpenPlanner={scrollToPlanner}
-          />
-          <div ref={goalPlannerRef}>
-            <GoalPlanner
-              goals={goals}
-              logsCount={logs.length}
-              isGoalActionLoading={isGoalActionLoading}
-              onCreateGoal={onCreateGoal}
-              onPauseGoal={onPauseGoal}
-              onResumeGoal={onResumeGoal}
-              onSetPrimaryGoal={onSetPrimaryGoal}
-              onDeleteGoal={onDeleteGoal}
-            />
+    <>
+      <NoticeToast
+        open={Boolean(notice)}
+        message={notice?.message || ''}
+        tone={notice?.tone || 'info'}
+        onClose={() => setNotice(null)}
+      />
+      <div
+        className="relative flex h-full min-h-full flex-col animate-in fade-in slide-in-from-bottom-4 duration-500"
+        onTouchStart={handleTimelineTouchStart}
+        onTouchEnd={handleTimelineTouchEnd}
+      >
+      <input type="file" accept="image/*" capture="environment" className="hidden" ref={fileInputRef} onChange={handleImageUpload} />
+
+      <div className="flex-1 px-4 pb-44 pt-2 sm:pb-40">
+        <div className="space-y-4">
+          {suggestion && (
+            <div className="max-w-[86%] rounded-[1.6rem] rounded-bl-md border border-amber-300/20 bg-amber-50 px-4 py-3 shadow-sm">
+              <div className="flex items-start gap-3 relative overflow-hidden group">
+                <div className="p-2 bg-amber-100 rounded-lg text-xl flex-none">
+                  {suggestion.type === 'health' ? '🌿' : suggestion.type === 'productivity' ? '🚀' : suggestion.type === 'work_life_balance' ? '⚖️' : '💡'}
+                </div>
+                <div className="flex-1 z-10">
+                  <h4 className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-0.5">{t('logger.smart_suggestion')}</h4>
+                  <p className="text-sm font-medium text-slate-700 leading-snug">{suggestion.content}</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setSuggestion(null);
+                    localStorage.removeItem('current_suggestion');
+                  }}
+                  className="text-slate-300 hover:text-slate-500 z-10 p-1"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            <div className="flex justify-start">
+              <div className="max-w-[84%] rounded-[1.6rem] rounded-bl-md bg-white px-4 py-3 text-sm leading-relaxed text-slate-700 shadow-sm ring-1 ring-slate-200">
+                {t('logger.chat_assistant_intro')}
+              </div>
+            </div>
+
+            {recentChatMessages.map((message, index: number) => {
+              const prevMessage = index > 0 ? recentChatMessages[index - 1] : null;
+              const showTimeLabel = index === 0 ||
+                (prevMessage && shouldShowTimeLabel(prevMessage.timestamp, message.timestamp));
+
+              return (
+                <React.Fragment key={message.id}>
+                  {showTimeLabel && (
+                    <div className="flex justify-center">
+                      <span className="text-xs text-slate-400">{formatMessageTime(message.timestamp)}</span>
+                    </div>
+                  )}
+                  <div className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={message.role === 'user'
+                      ? 'max-w-[82%] rounded-[1.6rem] rounded-br-md bg-amber-400 px-4 py-3 text-left text-sm font-medium leading-relaxed text-slate-950 shadow-sm'
+                      : 'max-w-[86%] rounded-[1.6rem] rounded-bl-md bg-[#fffaf0] px-4 py-3 text-sm leading-relaxed text-slate-700 shadow-sm ring-1 ring-amber-100'}>
+                      {message.role === 'assistant' && message.messageType === 'confirmation' && (
+                        <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-600">
+                          {t('logger.thread_saved_label')}
+                        </div>
+                      )}
+                      <div className={message.role === 'assistant' && message.messageType === 'confirmation' ? 'mt-1' : ''}>
+                        {message.content}
+                      </div>
+                      {message.role === 'user' && latestUndoableUserMessageId === message.id && (
+                        <div className="mt-3 flex items-center justify-end gap-2">
+                          <span className="text-[11px] text-slate-800/70">
+                            {t('logger.undo_available_window')}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => void handleUndoUserMessage(message.id)}
+                            className="rounded-full bg-white/90 px-3 py-1.5 text-xs font-bold text-slate-700 ring-1 ring-amber-200 transition-colors hover:text-red-600 hover:ring-red-200"
+                          >
+                            {t('logger.undo_latest_message')}
+                          </button>
+                        </div>
+                      )}
+                      {message.role === 'assistant' && message.messageType === 'confirmation' && latestUndoableConfirmationId === message.id && (
+                        <div className="mt-3 flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void handleUndoConfirmation(message)}
+                            className="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-slate-700 ring-1 ring-amber-200 transition-colors hover:text-red-600 hover:ring-red-200"
+                          >
+                            {t('logger.undo_latest_record')}
+                          </button>
+                          <span className="text-[11px] text-slate-400">
+                            {t('logger.undo_available_window')}
+                          </span>
+                        </div>
+                      )}
+                      {message.role === 'assistant' && message.metadata?.kind === 'pending_preview' && message.metadata?.draftData && (() => {
+                        const draftData = message.metadata.draftData as ReturnType<typeof buildDraftPreview>;
+                        const isExpanded = expandedPendingMessageId ? expandedPendingMessageId === message.id : message.id === latestPendingPreviewId;
+                        const isExpired = isDraftExpired(draftData, currentTime);
+                        return (
+                          <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setExpandedPendingMessageId((currentId) => currentId === message.id ? null : message.id);
+                              }}
+                              className="w-full px-3 py-2 flex items-center justify-between text-left"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-600">
+                                  {t('logger.preview_label')}
+                                </span>
+                                <span className="text-xs text-slate-500">{draftData.summary}</span>
+                              </div>
+                              <svg
+                                className={`w-4 h-4 text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </button>
+                            {isExpanded && (
+                              <div className="px-3 pb-3 border-t border-amber-100">
+                                <div className="pt-2">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div>
+                                      <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-700">
+                                        {t(`logger.preview_kind.${draftData.kind}`)}
+                                      </p>
+                                      <p className="mt-1 text-sm text-slate-600">{draftData.summary}</p>
+                                    </div>
+                                    <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-slate-500 ring-1 ring-amber-200 shrink-0">
+                                      {isExpired ? t('logger.preview_expired') : t('logger.preview_ready')}
+                                    </span>
+                                  </div>
+                                  {draftData.meta.length > 0 && (
+                                    <div className="mt-2 flex flex-wrap gap-1">
+                                      {draftData.meta.map((item: string) => (
+                                        <span key={item} className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold text-slate-600 ring-1 ring-slate-200">
+                                          {item}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                  <div className="mt-3 flex items-center justify-between gap-2">
+                                    <span className="text-[11px] text-slate-500">
+                                      {isExpired ? t('logger.preview_expired') : t('logger.preview_available_window')}
+                                    </span>
+                                    {!isExpired && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRestorePendingDraft(draftData)}
+                                        disabled={isProcessing}
+                                        className="rounded-full bg-slate-900 px-4 py-1.5 text-xs font-bold text-white disabled:opacity-60"
+                                      >
+                                        {t('logger.retry_confirm')}
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                </React.Fragment>
+              );
+            })}
+            {!isComposerOpen && draftParse && (
+              <div className="flex justify-start">
+                <div className="max-w-[88%] rounded-[1.6rem] rounded-bl-md border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-slate-700 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-700">
+                        {t('logger.preview_label')}
+                      </p>
+                      <h4 className="mt-1 text-base font-black text-slate-900">
+                        {t(`logger.preview_kind.${draftParse.kind}`)}
+                      </h4>
+                      <p className="mt-1 leading-relaxed text-slate-600">
+                        {draftParse.summary}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-white px-3 py-1 text-[11px] font-bold text-slate-500 ring-1 ring-amber-200">
+                      {t('logger.preview_ready')}
+                    </span>
+                  </div>
+
+                  {draftParse.meta.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {draftParse.meta.map((item) => (
+                        <span key={item} className="rounded-full bg-white px-3 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200">
+                          {item}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="mt-4 flex gap-2">
+                    <span className="flex items-center text-[11px] text-slate-500">
+                      {isCurrentDraftExpired ? t('logger.preview_expired') : t('logger.preview_available_window')}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleConfirmDraft}
+                      disabled={isProcessing || isCurrentDraftExpired}
+                      className="rounded-full bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {t('logger.confirm_save')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowUndoConfirm(true)}
+                      disabled={isProcessing}
+                      className="rounded-full bg-white px-4 py-2 text-sm font-bold text-slate-400 ring-1 ring-slate-200 hover:text-red-500 hover:ring-red-200 disabled:opacity-60"
+                    >
+                      {t('logger.cancel_draft')}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {uploadedImages.length > 0 && (
+              <>
+                <div className="flex justify-end">
+                  <div className="max-w-[86%] rounded-[1.6rem] rounded-br-md bg-white px-3 py-3 shadow-sm ring-1 ring-slate-200">
+                    <div className="grid grid-cols-3 gap-2">
+                      {uploadedImages.map((url, idx) => (
+                        <div key={idx} className="relative overflow-hidden rounded-xl bg-slate-100">
+                          <img src={url} alt="Uploaded" className="h-24 w-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => setUploadedImages((prev) => prev.filter((_, imageIndex) => imageIndex !== idx))}
+                            className="absolute right-1 top-1 rounded-full bg-black/55 p-1 text-white"
+                          >
+                            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex justify-start">
+                  <div className="max-w-[88%] rounded-[1.6rem] rounded-bl-md bg-[#fffaf0] px-4 py-3 text-sm text-slate-700 shadow-sm ring-1 ring-amber-100">
+                    <label className="flex items-center gap-2 font-medium text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={imageDirectAnalyze}
+                        onChange={(event) => setImageDirectAnalyze(event.target.checked)}
+                        className="h-4 w-4 rounded border-slate-300 text-amber-500 focus:ring-amber-300"
+                      />
+                      {t('logger.image_direct_toggle')}
+                    </label>
+                    <p className="mt-2 text-xs leading-relaxed text-slate-500">
+                      {imageDirectAnalyze ? t('logger.image_direct_hint') : t('logger.image_describe_hint')}
+                    </p>
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void handleImageFlowAction()}
+                        className="rounded-full bg-slate-900 px-4 py-2 text-sm font-bold text-white"
+                      >
+                        {imageDirectAnalyze ? t('logger.image_direct_action') : t('logger.image_describe_action')}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div ref={chatBottomRef} className="h-px scroll-mb-28" />
           </div>
-          {rewardProfile && <RewardSnapshotCard rewardProfile={rewardProfile} />}
-        </>
+        </div>
+      </div>
+
+      {recentConversation.length > 0 && !showTimelineDrawer && (
+        <button
+          type="button"
+          onClick={() => setShowTimelineDrawer(true)}
+          className="fixed right-0 top-1/2 z-30 -translate-y-1/2 rounded-l-2xl border border-r-0 border-amber-200 bg-white/95 px-2 py-4 text-[11px] font-bold tracking-[0.2em] text-amber-700 shadow-lg shadow-amber-100/60 backdrop-blur"
+          aria-label={t('logger.record_stream_open', '打开最近记录时间线')}
+        >
+          {t('logger.record_stream_tab', '记录')}
+        </button>
       )}
-      
-      {suggestion && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3 relative overflow-hidden group">
-          <div className="p-2 bg-amber-100 rounded-lg text-xl flex-none">
-            {suggestion.type === 'health' ? '🌿' : 
-             suggestion.type === 'productivity' ? '🚀' : 
-             suggestion.type === 'work_life_balance' ? '⚖️' : '💡'}
-          </div>
-          <div className="flex-1 z-10">
-            <h4 className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-0.5">{t('logger.smart_suggestion')}</h4>
-            <p className="text-sm font-medium text-slate-700 leading-snug">{suggestion.content}</p>
-          </div>
-          <button 
-            onClick={() => {
-              setSuggestion(null);
-              // Clear cache so it doesn't reappear immediately
-              localStorage.removeItem('current_suggestion');
-            }} 
-            className="text-slate-300 hover:text-slate-500 z-10 p-1"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
-          
-          {/* Decor background */}
-          <div className="absolute -right-4 -bottom-4 w-16 h-16 bg-white/40 rounded-full blur-xl group-hover:bg-amber-200/30 transition-colors"></div>
+
+      {showTimelineDrawer && (
+        <div className="fixed inset-0 z-[88]">
+          <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-[2px]" onClick={() => setShowTimelineDrawer(false)} />
+          <aside className="absolute right-0 top-0 h-full w-[86%] max-w-[380px] overflow-y-auto border-l border-slate-200 bg-white shadow-2xl animate-in slide-in-from-right duration-300">
+            <div className="sticky top-0 z-10 border-b border-slate-100 bg-white/95 px-5 py-4 backdrop-blur-sm">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                    {t('logger.record_stream_label', '最近记录')}
+                  </p>
+                  <h3 className="mt-1 text-2xl font-black tracking-tight text-slate-900">
+                    {t('logger.record_timeline_title', '生活时间线')}
+                  </h3>
+                  <p className="mt-2 text-sm leading-relaxed text-slate-500">
+                    {t('logger.record_timeline_desc', '右侧抽屉只展示已经保存的记录，和聊天区分开。')}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowTimelineDrawer(false)}
+                  className="rounded-full bg-slate-100 p-2 text-slate-500 transition-colors hover:bg-slate-200"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="px-5 py-5">
+              <div className="space-y-6">
+                {timelineGroups.map((group) => (
+                  <section key={group.key} className="space-y-4">
+                    <div className="sticky top-[88px] z-[1] -mx-1 px-1 py-1">
+                      <div className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 ring-1 ring-slate-200">
+                        {group.key === 'today'
+                          ? t('logger.timeline_group_today', '今天')
+                          : group.key === 'yesterday'
+                            ? t('logger.timeline_group_yesterday', '昨天')
+                            : t('logger.timeline_group_earlier', '更早')}
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      {group.items.map((log, index) => (
+                        <div key={log.id} className="relative pl-8">
+                          <div className="absolute left-[11px] top-0 h-full w-px bg-amber-100"></div>
+                          <div className="absolute left-0 top-2 h-6 w-6 rounded-full border-4 border-white bg-amber-400 shadow-sm"></div>
+                          <div className="rounded-[1.5rem] bg-[#fffaf0] px-4 py-4 ring-1 ring-amber-100 shadow-sm">
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-700">
+                                {new Date(log.timestamp).toLocaleString(i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </p>
+                              <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold text-slate-500 ring-1 ring-slate-200">
+                                {index + 1}
+                              </span>
+                            </div>
+                            <p className="mt-2 text-sm font-medium leading-relaxed text-slate-800">
+                              {log.rawText}
+                            </p>
+                            <p className="mt-2 text-sm leading-relaxed text-slate-500">
+                              {t('logger.thread_saved_format', { activity: log.activity })}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            </div>
+          </aside>
         </div>
       )}
 
-      <div className="bg-white border border-slate-200 rounded-[2rem] p-5 shadow-sm hover:shadow-md transition-shadow">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-600">
-              {t('logger.launcher_label')}
-            </p>
-            <h3 className="mt-1 text-2xl font-black tracking-tight text-slate-900">
-              {t('logger.launcher_title')}
-            </h3>
-            <p className="mt-2 text-sm text-slate-500 leading-relaxed">
-              {t('logger.launcher_desc')}
-            </p>
-          </div>
+      {showGoalDrawer && (
+        <div className="fixed inset-0 z-[85]">
+          <div className="absolute inset-0 bg-slate-900/25 backdrop-blur-[2px]" onClick={() => setShowGoalDrawer(false)} />
+          <aside className="absolute left-0 top-0 h-full w-[88%] max-w-[360px] overflow-y-auto bg-white shadow-2xl ring-1 ring-slate-200 animate-in slide-in-from-left duration-300">
+            <div className="sticky top-0 z-10 border-b border-slate-100 bg-white/95 px-5 py-4 backdrop-blur-sm">
+              <div className="mb-4">
+                <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                  {t('logger.sidebar_menu_title')}
+                </p>
+                <div className="mt-3 space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => setSidebarTab('record-add')}
+                    className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition-colors ${sidebarTab === 'record-add' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                  >
+                    <span>
+                      <span className="block text-sm font-bold">{t('logger.record_add_label')}</span>
+                      <span className={`mt-1 block text-xs ${sidebarTab === 'record-add' ? 'text-slate-300' : 'text-slate-500'}`}>{t('logger.record_add_hint')}</span>
+                    </span>
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
+                  </button>
 
-          <button
-            type="button"
-            onClick={() => handleQuickCompose()}
-            className="shrink-0 px-4 py-3 rounded-2xl bg-slate-900 text-white text-sm font-bold hover:bg-slate-800 transition-colors"
-          >
-            {t('logger.open_composer')}
-          </button>
+                  {!isGuest && (
+                    <button
+                      type="button"
+                      onClick={() => setSidebarTab('goals')}
+                      className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left transition-colors ${sidebarTab === 'goals' ? 'bg-amber-500 text-white' : 'bg-amber-50 text-amber-700 hover:bg-amber-100'}`}
+                    >
+                      <span>
+                        <span className="block text-sm font-bold">{t('logger.goal_drawer_label')}</span>
+                        <span className={`mt-1 block text-xs ${sidebarTab === 'goals' ? 'text-amber-100' : 'text-amber-700/80'}`}>{focusGoal ? t('logger.goal_drawer_goal_hint', { count: activeGoals.length }) : t('logger.goal_drawer_empty_hint')}</span>
+                      </span>
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-600">
+                    {sidebarTab === 'goals' ? t('logger.goal_drawer_label') : t('logger.record_add_label')}
+                  </p>
+                  <h3 className="mt-1 text-2xl font-black tracking-tight text-slate-900">
+                    {sidebarTab === 'goals' ? t('goals.analytics_title') : t('logger.record_add_title')}
+                  </h3>
+                  <p className="mt-2 text-sm leading-relaxed text-slate-500">
+                    {sidebarTab === 'goals'
+                      ? (focusGoal ? t('logger.goal_drawer_focus_desc', { title: focusGoal.title }) : t('logger.goal_drawer_manage_desc'))
+                      : t('logger.record_add_panel_desc')}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowGoalDrawer(false)}
+                  className="rounded-full bg-slate-100 p-2 text-slate-500 transition-colors hover:bg-slate-200"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              {sidebarTab === 'goals' ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="rounded-full bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-700 ring-1 ring-amber-100">
+                    {t('logger.goal_drawer_active_count', { count: activeGoals.length })}
+                  </span>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold text-slate-700 ring-1 ring-slate-200">
+                    {t('logger.goal_drawer_failed_count', { count: interruptedGoalsCount })}
+                  </span>
+                  {rewardProfile && (
+                    <span className="rounded-full bg-white px-3 py-1 text-[11px] font-bold text-slate-700 ring-1 ring-slate-200">
+                      {t('rewards.points_value', { count: rewardProfile.availablePoints })}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleOpenRecordAddComposer}
+                    className="rounded-full bg-amber-500 px-4 py-2 text-sm font-bold text-white"
+                  >
+                    {t('logger.record_add_open_full')}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="px-4 py-4">
+              {sidebarTab === 'goals' ? (
+                <GoalPlanner
+                  goals={goals}
+                  logsCount={logs.length}
+                  isGoalActionLoading={isGoalActionLoading}
+                  onCreateGoal={onCreateGoal}
+                  onPauseGoal={onPauseGoal}
+                  onResumeGoal={onResumeGoal}
+                  onSetPrimaryGoal={onSetPrimaryGoal}
+                  onDeleteGoal={onDeleteGoal}
+                />
+              ) : (
+                <div className="space-y-4 rounded-[1.5rem] border border-slate-200 bg-[#fffaf0] p-4">
+                  <div>
+                    <p className="text-sm font-bold text-slate-900">{t('logger.record_add_keep_tools')}</p>
+                    <p className="mt-1 text-sm leading-relaxed text-slate-500">{t('logger.record_add_keep_tools_desc')}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={captureLocation}
+                    disabled={isGettingLocation}
+                    className={`flex w-full items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-sm font-bold transition-colors ${currentLocation ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'}`}
+                  >
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                    {currentLocation ? currentLocation.name : t('logger.record_add_location_action')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleOpenRecordAddComposer}
+                    className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white"
+                  >
+                    {t('logger.record_add_open_full')}
+                  </button>
+                </div>
+              )}
+            </div>
+          </aside>
         </div>
+      )}
 
-        <div className="grid grid-cols-2 gap-4 mt-5">
-          <QuickTip text={t('logger.quick_tips.gym')} onClick={handleQuickCompose} />
-          <QuickTip text={t('logger.quick_tips.code')} onClick={handleQuickCompose} />
-          <QuickTip text={t('logger.quick_tips.date')} onClick={handleQuickCompose} />
-          <QuickTip text={t('logger.quick_tips.read')} onClick={handleQuickCompose} />
+      <div className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] z-20 flex justify-center px-3">
+        <div className="pointer-events-auto w-full max-w-[400px] px-1">
+          <div className="rounded-[2rem] border border-slate-200 bg-white/95 px-3 py-3 shadow-2xl shadow-slate-200/70 backdrop-blur-xl">
+            {isListening && (
+              <div className="mb-3 rounded-[1.4rem] border border-red-100 bg-red-50 px-4 py-3 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-red-500">
+                      {i18n.language.startsWith('zh') ? '正在录音' : 'Listening'}
+                    </p>
+                    <p className="mt-1 text-sm leading-relaxed text-slate-700">
+                      {inputText || (i18n.language.startsWith('zh') ? '请继续说，松开发送。' : 'Keep speaking, release to send.')}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-white px-3 py-1 text-[11px] font-bold text-red-500 ring-1 ring-red-100">
+                    {i18n.language.startsWith('zh') ? '松开发送' : 'Release to send'}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isListening}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 ring-1 ring-slate-200 transition-colors hover:bg-amber-50 hover:text-amber-700"
+                title={t('logger.camera_or_upload')}
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 7h4l2-2h6l2 2h4v11a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 16a3 3 0 100-6 3 3 0 000 6z" /></svg>
+              </button>
+              {showInlineKeyboard ? (
+                <form onSubmit={handleSubmit} className="flex flex-1 items-center gap-2 rounded-full bg-slate-50 px-3 py-1.5 ring-1 ring-slate-200">
+                  <input
+                    ref={inlineInputRef}
+                    value={inputText}
+                    onChange={(event) => setInputText(event.target.value)}
+                    placeholder={t('logger.placeholder')}
+                    className="min-w-0 flex-1 border-none bg-transparent px-1 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-0"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!inputText.trim() || isProcessing}
+                    className="rounded-full bg-amber-500 p-2.5 text-slate-950 transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isProcessing ? (
+                      <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                      </svg>
+                    ) : (
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                      </svg>
+                    )}
+                  </button>
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  onTouchStart={startVoiceInput}
+                  onMouseDown={startVoiceInput}
+                  className={`flex-1 rounded-full px-5 py-3 text-sm font-bold transition-colors touch-none select-none ${isListening ? 'bg-red-500 text-white' : 'bg-amber-500 text-white hover:bg-amber-400'}`}
+                >
+                  {isListening
+                    ? (i18n.language.startsWith('zh') ? '松开发送' : 'Release to send')
+                    : (i18n.language.startsWith('zh') ? '按住说话' : 'Hold to talk')}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleOpenInlineKeyboard}
+                disabled={isListening}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white transition-colors hover:bg-slate-800"
+                title={t('logger.keyboard_input')}
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8h16a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 12h.01M10 12h.01M13 12h.01M16 12h.01M7 15h10" /></svg>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
       {isComposerOpen && (
         <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="absolute inset-0 bg-black/45 backdrop-blur-sm" onClick={handleCloseComposer} />
-          <div className="relative z-10 w-full sm:max-w-xl bg-white rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl border border-slate-100 max-h-[88vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white/95 backdrop-blur-sm px-5 pt-5 pb-4 border-b border-slate-100 rounded-t-[2rem]">
+          <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={handleCloseComposer} />
+          <div className="relative z-10 w-full sm:max-w-xl bg-[#fffaf0] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl border border-slate-100 max-h-[88vh] overflow-y-auto">
+            <div className="sticky top-0 rounded-t-[2rem] border-b border-slate-100 bg-[#fffaf0]/95 px-5 pt-5 pb-4 backdrop-blur-sm">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-600">
@@ -614,16 +1676,72 @@ const Logger: React.FC<LoggerProps> = ({
             </div>
 
             <div className="p-5 space-y-4">
-              <div className="bg-white border border-slate-200 rounded-[2rem] p-5 shadow-sm hover:shadow-md transition-shadow relative">
+              <div className="flex justify-start">
+                <div className="max-w-[88%] rounded-[1.5rem] rounded-bl-md bg-slate-900 px-4 py-3 text-sm leading-relaxed text-white shadow-sm">
+                  {t('logger.chat_assistant_modal_intro')}
+                </div>
+              </div>
+
+              <div className="relative rounded-[2rem] border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)] p-5 shadow-sm transition-shadow hover:shadow-md">
                 <textarea
                   ref={textareaRef}
                   value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
+                  onChange={(e) => {
+                    setInputText(e.target.value);
+                    if (draftParse) {
+                      setDraftParse(null);
+                    }
+                  }}
                   placeholder={t('logger.placeholder')}
-                  className="w-full bg-transparent border-none focus:ring-0 text-lg text-slate-800 placeholder:text-slate-400 min-h-[140px] pb-12 resize-none"
+                  className="min-h-[140px] w-full resize-none rounded-[1.5rem] border-none bg-transparent text-lg text-slate-800 placeholder:text-slate-400 focus:ring-0 pb-12"
                 />
 
-                {(uploadedImages.length > 0 || currentLocation) && (
+                {draftParse && (
+                  <div className="mb-4 rounded-[1.5rem] border border-amber-200 bg-amber-50 p-4 text-sm text-slate-700">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-700">
+                          {t('logger.preview_label')}
+                        </p>
+                        <h4 className="mt-1 text-base font-black text-slate-900">
+                          {t(`logger.preview_kind.${draftParse.kind}`)}
+                        </h4>
+                        <p className="mt-1 leading-relaxed text-slate-600">
+                          {draftParse.summary}
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-white px-3 py-1 text-[11px] font-bold text-slate-500 ring-1 ring-amber-200">
+                        {t('logger.preview_ready')}
+                      </span>
+                    </div>
+
+                    {draftParse.meta.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {draftParse.meta.map((item) => (
+                          <span key={item} className="rounded-full bg-white px-3 py-1 text-[11px] font-bold text-slate-600 ring-1 ring-slate-200">
+                            {item}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="mt-4 flex gap-2">
+                      <span className="flex items-center text-[11px] text-slate-500">
+                        {isCurrentDraftExpired ? t('logger.preview_expired') : t('logger.preview_available_window')}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleConfirmDraft}
+                        disabled={isProcessing || isCurrentDraftExpired}
+                        className="rounded-full bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {t('logger.confirm_save')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {(uploadedImages.length > 0 || currentLocation) && composerMode === 'record-add' && (
                   <div className="flex flex-wrap gap-2 mb-4 px-1">
                     {uploadedImages.map((url, idx) => (
                       <div key={idx} className="relative group w-14 h-14 rounded-xl overflow-hidden border border-slate-100 shadow-sm">
@@ -649,11 +1767,13 @@ const Logger: React.FC<LoggerProps> = ({
                   </div>
                 )}
 
-                <div className="flex justify-between items-center bg-slate-50 -mx-5 -mb-5 px-5 py-3 rounded-b-[2rem] border-t border-slate-100">
+                <div className="-mx-5 -mb-5 flex items-center justify-between rounded-b-[2rem] border-t border-slate-100 bg-slate-50 px-5 py-3">
+                  {composerMode === 'record-add' ? (
                   <div className="flex items-center gap-2 relative overflow-x-auto no-scrollbar flex-1 mr-2 py-1">
                     <button 
                       type="button"
-                      onClick={toggleListening}
+                      onTouchStart={startVoiceInput}
+                      onMouseDown={startVoiceInput}
                       className={`flex-none p-2.5 rounded-xl transition-all ${
                         isListening 
                           ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-100' 
@@ -661,18 +1781,11 @@ const Logger: React.FC<LoggerProps> = ({
                             ? 'bg-red-50 text-red-400' 
                             : 'bg-white text-slate-500 hover:text-amber-700 hover:bg-white shadow-sm border border-slate-100'
                       }`}
-                      title={isListening ? t('logger.stop_recording') : t('logger.voice_input')}
+                      title={isListening ? (i18n.language.startsWith('zh') ? '松开发送' : 'Release to send') : (i18n.language.startsWith('zh') ? '按住说话' : 'Hold to talk')}
                     >
                       <svg className="w-5 h-5 flex-none" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
                     </button>
 
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      className="hidden" 
-                      ref={fileInputRef} 
-                      onChange={handleImageUpload} 
-                    />
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
@@ -730,13 +1843,18 @@ const Logger: React.FC<LoggerProps> = ({
                       </div>
                     )}
                   </div>
+                  ) : (
+                    <div className="flex-1 pr-3 text-xs leading-relaxed text-slate-500">
+                      {t('logger.keyboard_mode_hint')}
+                    </div>
+                  )}
 
                   <div className="relative flex-none">
                     <button
                       onClick={handleSubmit}
-                      disabled={!inputText.trim() || isProcessing}
-                      className={`px-6 py-3 rounded-full font-bold text-white transition-all whitespace-nowrap ${
-                        isProcessing ? 'bg-slate-400 cursor-wait' : 'bg-amber-500 text-slate-950 hover:bg-amber-400 active:scale-95 shadow-lg shadow-amber-200'
+                      disabled={!inputText.trim() || isProcessing || Boolean(draftParse)}
+                      className={`whitespace-nowrap rounded-full px-6 py-3 font-bold transition-all ${
+                        isProcessing ? 'cursor-wait bg-slate-400 text-white' : 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-200 hover:bg-amber-400 active:scale-95'
                       }`}
                     >
                       {isProcessing ? t('logger.processing') : t('logger.submit')}
@@ -817,18 +1935,132 @@ const Logger: React.FC<LoggerProps> = ({
           </div>
         </div>
       )}
-    </div>
+      {showUndoConfirm && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 text-center animate-in fade-in zoom-in duration-300">
+            <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-bold text-slate-800 mb-2">{t('logger.undo_confirm_title')}</h3>
+            <p className="text-slate-600 mb-6">
+              {t('logger.undo_confirm_desc')}
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => {
+                  setShowUndoConfirm(false);
+                  handleCancelDraft();
+                }}
+                className="w-full py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition-colors"
+              >
+                {t('logger.undo_confirm_yes')}
+              </button>
+              <button
+                onClick={() => setShowUndoConfirm(false)}
+                className="w-full py-3 text-slate-400 font-medium hover:text-slate-600 transition-colors"
+              >
+                {t('logger.undo_confirm_no')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      </div>
+    </>
   );
 };
 
-const QuickTip: React.FC<{ text: string, onClick: (t: string) => void }> = ({ text, onClick }) => (
-  <button 
-    onClick={() => onClick(text)}
-    className="text-xs text-slate-500 bg-slate-100 hover:bg-slate-200 py-2 px-3 rounded-xl border border-slate-200 text-left truncate transition-colors"
-  >
-    "{text}"
-  </button>
-);
+const getPreviewPlanTimestamp = (plan: NonNullable<Awaited<ReturnType<typeof parseLifeLog>>['plan']>) => {
+  return plan.planType === 'reminder'
+    ? (plan.dueAt || plan.reminderAt || plan.startAt || Date.now())
+    : (plan.startAt || plan.dueAt || plan.reminderAt || Date.now());
+};
+
+const getTimelineGroupKey = (timestamp: number) => {
+  const target = new Date(timestamp);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const yesterday = today - 24 * 60 * 60 * 1000;
+  const targetDay = new Date(target.getFullYear(), target.getMonth(), target.getDate()).getTime();
+
+  if (targetDay === today) return 'today';
+  if (targetDay === yesterday) return 'yesterday';
+  return 'earlier';
+};
+
+const buildTimelineGroups = (logs: LogEntry[]) => {
+  const groups: Array<{ key: 'today' | 'yesterday' | 'earlier'; items: LogEntry[] }> = [
+    { key: 'today', items: [] },
+    { key: 'yesterday', items: [] },
+    { key: 'earlier', items: [] }
+  ];
+
+  logs.forEach((log) => {
+    const key = getTimelineGroupKey(log.timestamp);
+    const group = groups.find((item) => item.key === key);
+    group?.items.push(log);
+  });
+
+  return groups.filter((group) => group.items.length > 0);
+};
+
+const buildDraftPreview = (parsed: Awaited<ReturnType<typeof parseLifeLog>>, originalText: string) => {
+  const kind = parsed.intent === 'plan'
+    ? 'plan'
+    : parsed.finance && parsed.finance.length > 0
+      ? 'finance'
+      : 'log';
+
+  if (kind === 'plan' && parsed.plan) {
+    const timeLabel = getPreviewPlanTimestamp(parsed.plan)
+      ? new Date(getPreviewPlanTimestamp(parsed.plan)).toLocaleString()
+      : null;
+
+    return {
+      createdAt: Date.now(),
+      kind,
+      originalText,
+      parsed,
+      summary: parsed.plan.title || originalText,
+      meta: [
+        parsed.plan.planType === 'event' ? '日程事件' : '提醒事项',
+        timeLabel,
+        parsed.plan.syncTargetSuggestion === 'ios-calendar' ? '建议同步到 iOS 日历' : parsed.plan.syncTargetSuggestion === 'ios-reminder' ? '建议同步到 iOS 提醒事项' : null
+      ].filter(Boolean) as string[]
+    };
+  }
+
+  if (kind === 'finance' && parsed.finance && parsed.finance.length > 0) {
+    const total = parsed.finance.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    return {
+      createdAt: Date.now(),
+      kind,
+      originalText,
+      parsed,
+      summary: parsed.activity || originalText,
+      meta: [
+        `识别出 ${parsed.finance.length} 条账目`,
+        `金额合计 ${total}`,
+        parsed.finance[0]?.category || null
+      ].filter(Boolean) as string[]
+    };
+  }
+
+  return {
+    createdAt: Date.now(),
+    kind,
+    originalText,
+    parsed,
+    summary: parsed.activity || originalText,
+    meta: [
+      parsed.category || 'Other',
+      parsed.durationMinutes ? `${parsed.durationMinutes} 分钟` : null,
+      parsed.mood || null
+    ].filter(Boolean) as string[]
+  };
+};
 
 export default Logger;
 
@@ -865,8 +2097,7 @@ const PlanFocusCard: React.FC<{
               <div className="mt-4 flex flex-wrap gap-2">
                 <span className="rounded-full bg-white/80 px-3 py-1.5 text-[11px] font-bold text-slate-600 border border-white shadow-sm">
                   {t('rewards.points_value', { count: rewardProfile.availablePoints })}
-                </span>
-                <span className="rounded-full bg-white/80 px-3 py-1.5 text-[11px] font-bold text-slate-600 border border-white shadow-sm">
+        setExpandedPendingMessageId(pendingMsgId);
                   {t('rewards.level_value', { level: rewardProfile.level })}
                 </span>
               </div>

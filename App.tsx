@@ -1,15 +1,18 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { ViewMode, LogEntry, User, Goal, GoalCreateInput, RewardBadge, RewardLedgerEntry, RewardProfile } from './types';
+import { ViewMode, LogEntry, User, Goal, GoalCreateInput, Plan, PlanCreateInput, RewardBadge, RewardLedgerEntry, RewardProfile, ChatMessage, ChatMessageCreateInput } from './types';
 import Logger from './components/Logger';
 import History from './components/History';
 import Analytics from './components/Analytics';
 import Finance from './components/Finance';
 import Auth from './components/Auth';
+import PlanCenter from './components/PlanCenter';
 import { Layout } from './components/Layout';
 import InviteTools from './components/InviteTools';
 import { storageService } from './services/storageService';
+import { createChatMessage, deleteChatMessages, fetchChatMessages, syncLocalChatToCloud } from './services/chatService';
 import { createGoal, deleteGoal, fetchGoals, pauseGoal, resumeGoal, setPrimaryGoal } from './services/goalService';
+import { cancelPlan, completePlan, createPlan as createPlanItem, deletePlan as deletePlanItem, fetchPlans } from './services/planService';
 import { fetchRewardBadges, fetchRewardLedger, fetchRewardProfile } from './services/rewardService';
 
 const GUEST_STORAGE_USER = 'guest_user_v1';
@@ -19,18 +22,21 @@ const App: React.FC = () => {
   const [view, setView] = useState<ViewMode>(ViewMode.LOGGER);
   const [isLoggerComposerOpen, setIsLoggerComposerOpen] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [newLogAdded, setNewLogAdded] = useState(false);
   const [dailyInsight, setDailyInsight] = useState<string>('');
   const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [plans, setPlans] = useState<Plan[]>([]);
   const [rewardProfile, setRewardProfile] = useState<RewardProfile | null>(null);
   const [rewardBadges, setRewardBadges] = useState<RewardBadge[]>([]);
   const [rewardLedger, setRewardLedger] = useState<RewardLedgerEntry[]>([]);
   const [isGoalMutating, setIsGoalMutating] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
+  const [loggerSidebarOpenTick, setLoggerSidebarOpenTick] = useState(0);
   const lastAnalyzedFingerprint = React.useRef<string>('');
 
   // 初始化用户状态
@@ -63,15 +69,19 @@ const App: React.FC = () => {
 
     const fetchAppData = async () => {
       try {
-        const [logData, goalData, rewardData, rewardBadgesData, rewardLedgerData] = await Promise.all([
+        const [logData, chatData, goalData, planData, rewardData, rewardBadgesData, rewardLedgerData] = await Promise.all([
           storageService.getLogs(),
+          fetchChatMessages(),
           user.status === 'authenticated' ? fetchGoals() : Promise.resolve([]),
+          user.status === 'authenticated' ? fetchPlans() : Promise.resolve([]),
           user.status === 'authenticated' ? fetchRewardProfile() : Promise.resolve(null),
           user.status === 'authenticated' ? fetchRewardBadges() : Promise.resolve([]),
           user.status === 'authenticated' ? fetchRewardLedger(20) : Promise.resolve([])
         ]);
         setLogs(logData);
+        setChatMessages(chatData);
         setGoals(goalData);
+        setPlans(planData);
         setRewardProfile(rewardData);
         setRewardBadges(rewardBadgesData);
         setRewardLedger(rewardLedgerData);
@@ -88,17 +98,21 @@ const App: React.FC = () => {
     if (token) {
       localStorage.setItem(AUTH_TOKEN, token);
       // 登录后同步本地数据
-      await storageService.syncLocalToCloud();
+      await Promise.all([storageService.syncLocalToCloud(), syncLocalChatToCloud()]);
       // 重新拉取最新的云端数据
-      const [updatedLogs, updatedGoals, updatedRewardProfile, updatedRewardBadges, updatedRewardLedger] = await Promise.all([
+      const [updatedLogs, updatedChatMessages, updatedGoals, updatedPlans, updatedRewardProfile, updatedRewardBadges, updatedRewardLedger] = await Promise.all([
         storageService.getLogs(),
+        fetchChatMessages(),
         fetchGoals(),
+        fetchPlans(),
         fetchRewardProfile(),
         fetchRewardBadges(),
         fetchRewardLedger(20)
       ]);
       setLogs(updatedLogs);
+      setChatMessages(updatedChatMessages);
       setGoals(updatedGoals);
+      setPlans(updatedPlans);
       setRewardProfile(updatedRewardProfile);
       setRewardBadges(updatedRewardBadges);
       setRewardLedger(updatedRewardLedger);
@@ -115,6 +129,8 @@ const App: React.FC = () => {
     setUser(guestUser);
     localStorage.setItem(GUEST_STORAGE_USER, JSON.stringify(guestUser));
     setGoals([]);
+    setPlans([]);
+    setChatMessages([]);
     setRewardProfile(null);
     setRewardBadges([]);
     setRewardLedger([]);
@@ -123,6 +139,8 @@ const App: React.FC = () => {
   const handleLogout = () => {
     setUser(null);
     setGoals([]);
+    setPlans([]);
+    setChatMessages([]);
     setRewardProfile(null);
     setRewardBadges([]);
     setRewardLedger([]);
@@ -139,6 +157,11 @@ const App: React.FC = () => {
   const handleOpenLoggerComposer = useCallback(() => {
     setView(ViewMode.LOGGER);
     setIsLoggerComposerOpen(true);
+  }, []);
+
+  const handleOpenLoggerSidebar = useCallback(() => {
+    setView(ViewMode.LOGGER);
+    setLoggerSidebarOpenTick((prev) => prev + 1);
   }, []);
 
   const handleCloseLoggerComposer = useCallback(() => {
@@ -158,6 +181,46 @@ const App: React.FC = () => {
       console.error('Goal refresh error:', error);
     }
   }, [user]);
+
+  const refreshPlans = useCallback(async () => {
+    if (!user || user.status !== 'authenticated') {
+      setPlans([]);
+      return;
+    }
+
+    try {
+      const latestPlans = await fetchPlans();
+      setPlans(latestPlans);
+    } catch (error) {
+      console.error('Plan refresh error:', error);
+    }
+  }, [user]);
+
+  const handleCreateChatMessage = useCallback(async (messageInput: ChatMessageCreateInput) => {
+    const nextMessage: ChatMessage = {
+      id: messageInput.id || crypto.randomUUID(),
+      userId: user?.id || 'guest_local',
+      role: messageInput.role,
+      content: messageInput.content,
+      messageType: messageInput.messageType || 'text',
+      timestamp: messageInput.timestamp || Date.now(),
+      metadata: messageInput.metadata
+    };
+
+    setChatMessages((prev) => [...prev, nextMessage].sort((a, b) => a.timestamp - b.timestamp));
+
+    try {
+      const saved = await createChatMessage(nextMessage);
+      setChatMessages((prev) => prev.map((message) => message.id === nextMessage.id ? saved : message));
+    } catch (error) {
+      console.error('Create chat message error:', error);
+    }
+  }, [user]);
+
+  const handleDeleteChatMessages = useCallback(async (messageIds: string[]) => {
+    setChatMessages((prev) => prev.filter((msg) => !messageIds.includes(msg.id)));
+    await deleteChatMessages(messageIds);
+  }, []);
 
   const refreshRewards = useCallback(async () => {
     if (!user || user.status !== 'authenticated') {
@@ -210,7 +273,10 @@ const App: React.FC = () => {
   const deleteLog = useCallback(async (id: string) => {
     setLogs(prev => prev.filter(log => log.id !== id));
     await storageService.deleteLog(id);
-  }, []);
+    if (user?.status === 'authenticated') {
+      await Promise.all([refreshGoals(), refreshRewards()]);
+    }
+  }, [refreshGoals, refreshRewards, user]);
 
   const updateLog = useCallback(async (updatedLog: LogEntry) => {
     setLogs(prev => prev.map(log => log.id === updatedLog.id ? updatedLog : log));
@@ -292,6 +358,57 @@ const App: React.FC = () => {
     }
   }, [refreshGoals, user]);
 
+  const handleCreatePlan = useCallback(async (planInput: PlanCreateInput) => {
+    if (!user || user.status !== 'authenticated') return;
+
+    try {
+      const createdPlan = await createPlanItem(planInput);
+      await refreshPlans();
+      return createdPlan;
+    } catch (error) {
+      console.error('Create plan error:', error);
+      throw error;
+    }
+  }, [refreshPlans, user]);
+
+  const handleDeletePlan = useCallback(async (planId: string) => {
+    if (!user || user.status !== 'authenticated') return;
+
+    setPlans((prev) => prev.filter((plan) => plan.id !== planId));
+
+    try {
+      await deletePlanItem(planId);
+      await refreshPlans();
+    } catch (error) {
+      console.error('Delete plan error:', error);
+      throw error;
+    }
+  }, [refreshPlans, user]);
+
+  const handleCompletePlan = useCallback(async (planId: string) => {
+    if (!user || user.status !== 'authenticated') return;
+
+    try {
+      await completePlan(planId);
+      await refreshPlans();
+    } catch (error) {
+      console.error('Complete plan error:', error);
+      throw error;
+    }
+  }, [refreshPlans, user]);
+
+  const handleCancelPlan = useCallback(async (planId: string) => {
+    if (!user || user.status !== 'authenticated') return;
+
+    try {
+      await cancelPlan(planId);
+      await refreshPlans();
+    } catch (error) {
+      console.error('Cancel plan error:', error);
+      throw error;
+    }
+  }, [refreshPlans, user]);
+
   // 统一生成 AI 洞察的逻辑，防止重复请求
   const generateInsight = useCallback(async (currentLogs: LogEntry[]) => {
     if (!user || user.status === 'guest' || currentLogs.length === 0) return;
@@ -334,6 +451,7 @@ const App: React.FC = () => {
       currentView={view} 
       onViewChange={handleViewChange} 
       onOpenLoggerComposer={handleOpenLoggerComposer}
+      onOpenLoggerSidebar={handleOpenLoggerSidebar}
       newLogAdded={newLogAdded}
       userName={user.name}
       onLogout={handleLogout}
@@ -348,13 +466,20 @@ const App: React.FC = () => {
           userId={user.id} 
           isGuest={user.status === 'guest'}
           logs={logs}
+          chatMessages={chatMessages}
           goals={goals}
           rewardProfile={rewardProfile}
+          sidebarOpenRequestKey={loggerSidebarOpenTick}
           isComposerOpen={isLoggerComposerOpen}
           isGoalActionLoading={isGoalMutating}
           onOpenComposer={handleOpenLoggerComposer}
           onCloseComposer={handleCloseLoggerComposer}
           onCreateGoal={handleCreateGoal}
+          onCreateChatMessage={handleCreateChatMessage}
+          onDeleteChatMessages={handleDeleteChatMessages}
+          onCreatePlan={handleCreatePlan}
+          onDeleteLog={deleteLog}
+          onDeletePlan={handleDeletePlan}
           onPauseGoal={handlePauseGoal}
           onResumeGoal={handleResumeGoal}
           onSetPrimaryGoal={handleSetPrimaryGoal}
@@ -363,6 +488,15 @@ const App: React.FC = () => {
       )}
       {view === ViewMode.TIMELINE && (
         <History logs={logs} goals={goals} onDelete={deleteLog} onUpdate={updateLog} />
+      )}
+      {view === ViewMode.PLAN && (
+        <PlanCenter
+          plans={plans}
+          isGuest={user.status === 'guest'}
+          onOpenLoggerComposer={handleOpenLoggerComposer}
+          onCompletePlan={handleCompletePlan}
+          onCancelPlan={handleCancelPlan}
+        />
       )}
       {view === ViewMode.FINANCE && (
         <Finance userId={user.id} />

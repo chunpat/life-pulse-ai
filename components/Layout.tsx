@@ -9,6 +9,7 @@ interface LayoutProps {
   currentView: ViewMode;
   onViewChange: (view: ViewMode) => void;
   onOpenLoggerComposer: () => void;
+  onOpenLoggerSidebar?: () => void;
   newLogAdded?: boolean;
   userName?: string;
   onLogout?: () => void;
@@ -22,6 +23,7 @@ export const Layout: React.FC<LayoutProps> = ({
   currentView, 
   onViewChange, 
   onOpenLoggerComposer,
+  onOpenLoggerSidebar,
   newLogAdded = false,
   userName = '游客',
   onLogout,
@@ -33,28 +35,53 @@ export const Layout: React.FC<LayoutProps> = ({
   const { t, i18n } = useTranslation();
 
   const displayUserName = userName === '游客' ? t('common.guest_user') : userName;
+  const isLoggerView = currentView === ViewMode.LOGGER;
 
   return (
     // Outer Container - Desktop centered, Mobile full
-    <div className="fixed inset-0 sm:flex sm:items-center sm:justify-center bg-slate-100">
+    <div className={`fixed inset-0 sm:flex sm:items-center sm:justify-center ${isLoggerView ? 'bg-[#f6f1e8]' : 'bg-slate-100'}`}>
       
       {/* App Shell */}
-      <div className="w-full h-full sm:h-[850px] sm:max-w-[400px] bg-slate-50 sm:rounded-[3rem] sm:shadow-2xl sm:border-[8px] sm:border-slate-900 overflow-hidden flex flex-col relative transform-gpu">
+      <div className={`w-full h-full sm:h-[850px] sm:max-w-[400px] overflow-hidden flex flex-col relative transform-gpu ${isLoggerView ? 'bg-[radial-gradient(circle_at_top,#fff7e8_0%,#fffdf9_38%,#f8fafc_100%)] sm:rounded-[3rem] sm:shadow-2xl sm:border-[8px] sm:border-slate-900' : 'bg-slate-50 sm:rounded-[3rem] sm:shadow-2xl sm:border-[8px] sm:border-slate-900'}`}>
         
         {/* Onboarding Guide Overlay */}
         {showGuide && <OnboardingGuide onGenericClose={onCloseGuide} />}
 
         {/* Dynamic Header */}
-        <header className="px-6 py-6 bg-white/80 backdrop-blur-md sticky top-0 z-20 border-b border-slate-100">
+        <header className={`sticky top-0 z-20 ${isLoggerView ? 'border-b-0 bg-transparent px-4 py-4' : 'border-b border-slate-100 bg-white/80 px-6 py-6 backdrop-blur-md'}`}>
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-xl font-black text-slate-800 tracking-tighter">
-                {t('app.title')} <span className="text-amber-600">AI</span>
-              </h1>
-              <p className="text-[10px] text-slate-400 font-bold tracking-wide mt-0.5">
-                {t('common.hello')}, {displayUserName}
-              </p>
-            </div>
+            {isLoggerView ? (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={onOpenLoggerSidebar}
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white/95 text-slate-700 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+                  title={t('logger.sidebar_menu_title')}
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7h16M4 12h16M4 17h10" /></svg>
+                </button>
+                <div className="flex items-center gap-2 rounded-full bg-white/80 px-3 py-2 shadow-sm backdrop-blur-md ring-1 ring-amber-100">
+                  <span className="inline-flex h-2 w-2 rounded-full bg-amber-400" />
+                  <div>
+                    <h1 className="text-sm font-black tracking-tight text-slate-900">
+                      {t('app.title')} <span className="text-amber-600">AI</span>
+                    </h1>
+                    <p className="text-[10px] font-bold tracking-wide text-slate-500">
+                      {displayUserName}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <h1 className="text-xl font-black text-slate-800 tracking-tighter">
+                  {t('app.title')} <span className="text-amber-600">AI</span>
+                </h1>
+                <p className="text-[10px] text-slate-400 font-bold tracking-wide mt-0.5">
+                  {t('common.hello')}, {displayUserName}
+                </p>
+              </div>
+            )}
             
             <div className="flex items-center gap-2">
               <button 
@@ -63,16 +90,26 @@ export const Layout: React.FC<LayoutProps> = ({
                   onViewChange(ViewMode.FINANCE);
                   setIsMenuOpen(false);
                 }}
-                className={`p-2 rounded-full transition-colors ${currentView === ViewMode.FINANCE ? 'bg-amber-100 text-amber-700' : 'hover:bg-slate-100 text-slate-400'}`}
+                className={`p-2 rounded-full transition-colors ${isLoggerView ? (currentView === ViewMode.FINANCE ? 'bg-amber-500 text-white' : 'bg-white/80 text-slate-600 ring-1 ring-slate-200 hover:bg-amber-50') : (currentView === ViewMode.FINANCE ? 'bg-amber-100 text-amber-700' : 'hover:bg-slate-100 text-slate-400')}`}
                 title={t('nav.finance')}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
               </button>
 
+              {isLoggerView && (
+                <button
+                  onClick={() => onViewChange(ViewMode.PLAN)}
+                  className={`p-2 rounded-full transition-colors ${currentView === ViewMode.PLAN ? 'bg-amber-500 text-white' : 'bg-white/80 text-slate-600 ring-1 ring-slate-200 hover:bg-amber-50'}`}
+                  title={t('nav.plan')}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10m-11 9h12a2 2 0 002-2V7a2 2 0 00-2-2H6a2 2 0 00-2 2v11a2 2 0 002 2z" /></svg>
+                </button>
+              )}
+
               <div className="relative">
                 <button 
                   onClick={() => setIsMenuOpen(!isMenuOpen)}
-                  className={`p-2 rounded-full transition-colors ${isMenuOpen ? 'bg-amber-50 text-amber-700' : 'hover:bg-slate-100 text-slate-400'}`}
+                  className={`p-2 rounded-full transition-colors ${isLoggerView ? (isMenuOpen ? 'bg-amber-500 text-white' : 'bg-white/80 text-slate-600 ring-1 ring-slate-200 hover:bg-amber-50') : (isMenuOpen ? 'bg-amber-50 text-amber-700' : 'hover:bg-slate-100 text-slate-400')}`}
                   title={t('nav.profile_menu')}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
@@ -132,14 +169,15 @@ export const Layout: React.FC<LayoutProps> = ({
         </header>
 
         {/* Scrollable Content Area */}
-        <main className="flex-1 overflow-y-auto scrollbar-hide bg-slate-50 pb-28">
-           <div className="px-4 py-4 min-h-full">
+          <main className={`flex-1 overflow-y-auto scrollbar-hide ${isLoggerView ? 'bg-transparent pb-0' : 'bg-slate-50 pb-28'}`}>
+            <div className={`${isLoggerView ? 'h-full min-h-full px-0 pt-0 pb-0' : 'px-4 py-4 min-h-full'}`}>
             {children}
            </div>
         </main>
 
         {/* Floating Bottom Navigation */}
-        <nav className="absolute bottom-6 left-4 right-4 h-16 bg-white/90 backdrop-blur-xl rounded-2xl shadow-lg border border-white/20 flex items-center justify-between px-6 z-30">
+          {!isLoggerView && (
+          <nav className="absolute bottom-6 left-4 right-4 h-16 bg-white/90 backdrop-blur-xl rounded-2xl shadow-lg border border-white/20 flex items-center justify-between px-6 z-30">
           
           {/* Recent/Timeline */}
           <NavButton
@@ -149,6 +187,15 @@ export const Layout: React.FC<LayoutProps> = ({
             label={t('nav.timeline')}
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          </NavButton>
+
+          <NavButton
+            id="nav-plan"
+            active={currentView === ViewMode.PLAN}
+            onClick={() => onViewChange(ViewMode.PLAN)}
+            label={t('nav.plan')}
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10m-11 9h12a2 2 0 002-2V7a2 2 0 00-2-2H6a2 2 0 00-2 2v11a2 2 0 002 2z" /></svg>
           </NavButton>
 
           {/* ADD BUTTON (Floating outside) */}
@@ -191,6 +238,7 @@ export const Layout: React.FC<LayoutProps> = ({
           </NavButton>
 
         </nav>
+        )}
       </div>
     </div>
   );

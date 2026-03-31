@@ -38,10 +38,313 @@ function createChatCompletion(payload) {
   return client.chat.completions.create(request);
 }
 
+function getPlanHeuristicProfile(text) {
+  const normalized = String(text || '').trim();
+  if (!normalized) {
+    return {
+      normalized,
+      hasStrongPlanVerb: false,
+      hasActionVerb: false,
+      hasTimeSignal: false,
+      hasFutureDaySignal: false,
+      looksLikeQuestion: false,
+      looksLikeChat: false,
+      likelyPlan: false,
+      strongPlan: false
+    };
+  }
+
+  const strongPlanVerb = /(提醒我|记得提醒|别忘了|待办|待做|截止|ddl|deadline|appointment|schedule|scheduled|remind me|todo)/i;
+  const actionVerb = /(开会|会议|约见|预约|见面|出发|到达|体检|复诊|上课|航班|火车|高铁|面试|交房租|提交|办理|处理|参加|安排|计划|meeting|appointment|submit|departure|arrive|interview|rent|class|flight|train)/i;
+  const timeSignal = /(今晚|明天|后天|周[一二三四五六日天]|星期[一二三四五六日天]|下周|下个月|上午|中午|下午|晚上|凌晨|明早|明晚|tomorrow|tonight|next week|next month|this evening|this afternoon|\d+[:：]\d+|\d+点半?|\d+号|\d+日)/i;
+  const futureDaySignal = /(明天|后天|周[一二三四五六日天]|星期[一二三四五六日天]|下周|下个月|tomorrow|next week|next month)/i;
+  const questionSignal = /(\?|？|吗$|呢$|么$|怎么|为什么|是不是|可不可以|能不能|要不要|what|why|how|can i|should i)/i;
+  const casualChatSignal = /(哈哈|好的|行吧|在吗|收到|谢谢|晚安|早安|你好|hi|hello|ok|okay|lol)/i;
+
+  const hasStrongPlanVerb = strongPlanVerb.test(normalized);
+  const hasActionVerb = actionVerb.test(normalized);
+  const hasTimeSignal = timeSignal.test(normalized);
+  const hasFutureDaySignal = futureDaySignal.test(normalized);
+  const looksLikeQuestion = questionSignal.test(normalized);
+  const looksLikeChat = casualChatSignal.test(normalized);
+  const strongPlan = hasStrongPlanVerb || (hasFutureDaySignal && hasActionVerb);
+  const likelyPlan = hasStrongPlanVerb || ((hasTimeSignal || hasFutureDaySignal) && hasActionVerb);
+
+  return {
+    normalized,
+    hasStrongPlanVerb,
+    hasActionVerb,
+    hasTimeSignal,
+    hasFutureDaySignal,
+    looksLikeQuestion,
+    looksLikeChat,
+    likelyPlan,
+    strongPlan
+  };
+}
+
+function isLikelyPlanText(text) {
+  return getPlanHeuristicProfile(text).likelyPlan;
+}
+
+function isLikelyChatText(text) {
+  const normalized = String(text || '').trim();
+  if (!normalized) return false;
+
+  const profile = getPlanHeuristicProfile(normalized);
+  const assistantDirectedSignal = /(帮我|请问|你觉得|你认为|你能|可以帮|给我建议|怎么做|怎么办|为什么|你在吗|你好|早安|晚安|hi|hello|hey|can you|could you|would you|what do you think|please help|help me)/i;
+
+  if (profile.looksLikeQuestion || profile.looksLikeChat) {
+    return true;
+  }
+
+  return assistantDirectedSignal.test(normalized);
+}
+
+function buildDefaultAssistantReply(text, isEn) {
+  return isEn
+    ? `I got it. If you want, I can keep chatting with you, or help turn this into a plan, a life log, or a finance record: ${text}`
+    : `收到。你可以继续直接和我聊，我也可以帮你把这句话整理成计划、记录或记账：${text}`;
+}
+
+function shouldAcceptPlanResult(text, parsedPlan) {
+  if (!parsedPlan) return false;
+
+  const profile = getPlanHeuristicProfile(text);
+  const confidence = typeof parsedPlan.confidence === 'number'
+    ? parsedPlan.confidence
+    : Number(parsedPlan.confidence || 0);
+  const hasConcreteTime = Boolean(parsedPlan.startAt || parsedPlan.dueAt || parsedPlan.reminderAt);
+  const hasSpecificTitle = typeof parsedPlan.title === 'string'
+    && parsedPlan.title.trim()
+    && parsedPlan.title.trim() !== String(text || '').trim();
+
+  if (profile.strongPlan) return true;
+  if (profile.looksLikeQuestion && !profile.hasStrongPlanVerb) return false;
+  if (profile.looksLikeChat && !profile.hasStrongPlanVerb && !profile.hasFutureDaySignal) return false;
+
+  return (profile.likelyPlan && hasConcreteTime) || confidence >= 0.85 || (hasSpecificTitle && hasConcreteTime && confidence >= 0.7);
+}
+
+function normalizeTimestamp(value) {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) {
+    return numeric;
+  }
+
+  const parsed = Date.parse(String(value));
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function getTimeZoneOffsetMinutes(timeZone, date = new Date()) {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    timeZoneName: 'shortOffset',
+    hour: '2-digit'
+  });
+  const parts = formatter.formatToParts(date);
+  const offsetPart = parts.find((part) => part.type === 'timeZoneName')?.value || 'GMT+0';
+  const match = offsetPart.match(/GMT([+-])(\d{1,2})(?::?(\d{2}))?/i);
+
+  if (!match) {
+    return 0;
+  }
+
+  const sign = match[1] === '-' ? -1 : 1;
+  const hours = Number(match[2] || 0);
+  const minutes = Number(match[3] || 0);
+  return sign * (hours * 60 + minutes);
+}
+
+function getDateTimePartsInTimeZone(timeZone, date = new Date()) {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23'
+  });
+
+  const parts = formatter.formatToParts(date).reduce((acc, part) => {
+    if (part.type !== 'literal') {
+      acc[part.type] = part.value;
+    }
+    return acc;
+  }, {});
+
+  return {
+    year: Number(parts.year),
+    month: Number(parts.month),
+    day: Number(parts.day),
+    hour: Number(parts.hour),
+    minute: Number(parts.minute)
+  };
+}
+
+function zonedDateTimeToUtcMs(timeZone, year, month, day, hour = 0, minute = 0) {
+  const utcGuess = Date.UTC(year, month - 1, day, hour, minute, 0, 0);
+  const offsetMinutes = getTimeZoneOffsetMinutes(timeZone, new Date(utcGuess));
+  return utcGuess - offsetMinutes * 60 * 1000;
+}
+
+function normalizePlanPayload(plan, originalText) {
+  if (!plan || typeof plan !== 'object') {
+    return null;
+  }
+
+  const planType = plan.planType === 'event' ? 'event' : 'reminder';
+  const safeSyncTarget = ['ios-reminder', 'ios-calendar', 'none'].includes(plan.syncTargetSuggestion)
+    ? plan.syncTargetSuggestion
+    : 'none';
+
+  return {
+    title: typeof plan.title === 'string' && plan.title.trim() ? plan.title.trim() : originalText,
+    notes: typeof plan.notes === 'string' && plan.notes.trim() ? plan.notes.trim() : undefined,
+    planType,
+    startAt: planType === 'event' ? normalizeTimestamp(plan.startAt) : null,
+    endAt: planType === 'event' ? normalizeTimestamp(plan.endAt) : null,
+    dueAt: planType === 'reminder' ? normalizeTimestamp(plan.dueAt || plan.startAt) : null,
+    isAllDay: Boolean(plan.isAllDay),
+    reminderAt: normalizeTimestamp(plan.reminderAt),
+    syncTargetSuggestion: safeSyncTarget,
+    confidence: typeof plan.confidence === 'number' ? plan.confidence : Number(plan.confidence || 0),
+    originalText
+  };
+}
+
+function parseRelativeDayOffset(text) {
+  if (text.includes('后天')) return 2;
+  if (text.includes('明天')) return 1;
+  return 0;
+}
+
+function hasRelativeDayWord(text) {
+  return /(今天|今晚|明天|后天)/.test(text);
+}
+
+function parseTimeParts(text) {
+  const colonMatch = text.match(/(\d{1,2})[:：](\d{1,2})/);
+  if (colonMatch) {
+    return { hour: Number(colonMatch[1]), minute: Number(colonMatch[2]) };
+  }
+
+  const pointMatch = text.match(/(\d{1,2})点(半)?/);
+  if (!pointMatch) return null;
+
+  let hour = Number(pointMatch[1]);
+  let minute = pointMatch[2] ? 30 : 0;
+
+  if ((text.includes('下午') || text.includes('晚上')) && hour < 12) {
+    hour += 12;
+  }
+
+  if (text.includes('凌晨') && hour === 12) {
+    hour = 0;
+  }
+
+  return { hour, minute };
+}
+
+function applyRelativeDateOverride(plan, text, timeZone) {
+  if (!plan || !hasRelativeDayWord(text)) {
+    return plan;
+  }
+
+  const nowParts = getDateTimePartsInTimeZone(timeZone, new Date());
+  const relativeOffset = parseRelativeDayOffset(text);
+  const explicitTime = parseTimeParts(text);
+  const targetYear = nowParts.year;
+  const targetMonth = nowParts.month;
+  const targetDay = nowParts.day + relativeOffset;
+
+  const pickTime = (existingTimestamp, fallbackHour, fallbackMinute) => {
+    if (explicitTime) {
+      return explicitTime;
+    }
+
+    if (existingTimestamp) {
+      const parts = getDateTimePartsInTimeZone(timeZone, new Date(existingTimestamp));
+      return { hour: parts.hour, minute: parts.minute };
+    }
+
+    return { hour: fallbackHour, minute: fallbackMinute };
+  };
+
+  if (plan.planType === 'event') {
+    const startClock = pickTime(plan.startAt, 9, 0);
+    const startAt = zonedDateTimeToUtcMs(timeZone, targetYear, targetMonth, targetDay, startClock.hour, startClock.minute);
+    const duration = plan.startAt && plan.endAt && plan.endAt > plan.startAt
+      ? plan.endAt - plan.startAt
+      : 60 * 60 * 1000;
+    const reminderLead = plan.startAt && plan.reminderAt && plan.startAt > plan.reminderAt
+      ? plan.startAt - plan.reminderAt
+      : 30 * 60 * 1000;
+
+    return {
+      ...plan,
+      startAt,
+      endAt: startAt + duration,
+      reminderAt: startAt - reminderLead
+    };
+  }
+
+  const dueClock = pickTime(plan.dueAt || plan.startAt || plan.reminderAt, 9, 0);
+  const dueAt = zonedDateTimeToUtcMs(timeZone, targetYear, targetMonth, targetDay, dueClock.hour, dueClock.minute);
+  const reminderLead = plan.dueAt && plan.reminderAt && plan.dueAt > plan.reminderAt
+    ? plan.dueAt - plan.reminderAt
+    : 0;
+
+  return {
+    ...plan,
+    startAt: null,
+    endAt: null,
+    dueAt,
+    reminderAt: dueAt - reminderLead
+  };
+}
+
+function buildFallbackPlan(text, timeZone) {
+  const nowParts = getDateTimePartsInTimeZone(timeZone, new Date());
+  const offset = parseRelativeDayOffset(text);
+  const defaultBase = zonedDateTimeToUtcMs(timeZone, nowParts.year, nowParts.month, nowParts.day + offset, 9, 0);
+  const base = new Date(defaultBase);
+
+  const parsedTime = parseTimeParts(text);
+  if (parsedTime) {
+    base.setTime(zonedDateTimeToUtcMs(timeZone, nowParts.year, nowParts.month, nowParts.day + offset, parsedTime.hour, parsedTime.minute));
+  }
+
+  const isEvent = /(开会|会议|约|预约|见面|体检|复诊|上课|出发|到达|面试)/.test(text) || Boolean(parsedTime);
+  const syncTargetSuggestion = isEvent ? 'ios-calendar' : 'ios-reminder';
+  const reminderAt = isEvent
+    ? new Date(base.getTime() - 30 * 60 * 1000).getTime()
+    : base.getTime();
+
+  return {
+    title: text,
+    notes: undefined,
+    planType: isEvent ? 'event' : 'reminder',
+    startAt: isEvent ? base.getTime() : null,
+    endAt: isEvent ? new Date(base.getTime() + 60 * 60 * 1000).getTime() : null,
+    dueAt: isEvent ? null : base.getTime(),
+    isAllDay: false,
+    reminderAt,
+    syncTargetSuggestion,
+    confidence: 0.51,
+    originalText: text
+  };
+}
+
 // 解析生活日志 - 允许游客访问，前端负责次数限制
 router.post('/parse', async (req, res) => {
   try {
-    const { text, lang } = req.body;
+    const { text, lang, timezone, mode = 'auto', context = [] } = req.body;
     if (!text) return res.status(400).json({ message: '请提供文本内容' });
 
     if (!apiKey) {
@@ -55,79 +358,158 @@ router.post('/parse', async (req, res) => {
 
     console.log(`AI Parse - Input: ${text.substring(0, 20)}... | Lang param: ${lang} | Header: ${req.headers['accept-language']} | Resolved Lang: ${reqLang} | isEn: ${isEn}`);
 
-    const systemPromptZh = `你是一位专业的生活记录及财务助手。你的任务是从用户的随手记笔记中提取活动元数据以及财务消费情况。
-请返回纯 JSON 格式，不要包含 Markdown 格式（如 \`\`\`json）。
+    const now = new Date();
+    const resolvedTimezone = typeof timezone === 'string' && timezone.trim() ? timezone.trim() : 'Asia/Shanghai';
+    const planHint = mode === 'log' ? false : isLikelyPlanText(text);
+    const chatHint = isLikelyChatText(text);
+    const recentContext = Array.isArray(context)
+      ? context
+          .filter((item) => item && (item.role === 'user' || item.role === 'assistant') && typeof item.content === 'string')
+          .slice(-6)
+          .map((item) => ({ role: item.role, content: item.content.trim() }))
+          .filter((item) => item.content)
+      : [];
+    const contextPrompt = recentContext.length > 0
+      ? recentContext.map((item, index) => `${index + 1}. ${item.role === 'user' ? 'user' : 'assistant'}: ${item.content}`).join('\n')
+      : '';
 
-1. **生活记录** (作为根对象的属性):
-   - activity: 活动内容摘要(请严格使用中文，除非用户输入完全是英文)
-   - category: 必须是以下之一：Work, Leisure, Health, Chores, Social, Other。
-   - durationMinutes: 估算时长(分钟)
-   - mood: 心情(使用中文，如：开心、疲惫、高效)
-   - importance: 1-5分
+    const systemPromptZh = `你是一位生活助理，需要先判断用户输入属于以下四类之一：
+1. chat：普通对话、提问、寒暄、求建议、表达感受，希望你直接回复
+2. log：已经发生或正在发生的生活记录
+3. plan：未来安排、提醒、会议、约会、待办、日程
+4. finance：主要在表达收支
 
-2. **财务记录** (放入 finance 数组中, 如果没有则为空数组):
-   - type: "EXPENSE" (支出) 或 "INCOME" (收入)
-   - amount: 金额 (数字)
-   - category: 类别 (如: 餐饮, 交通, 购物, 工资, 理财 等)
-   - description: 描述 (使用中文)
+请返回纯 JSON，不要返回 Markdown。
+当前参考时间：${now.toISOString()}。
+当前用户时区：${resolvedTimezone}。
 
-返回格式示例：
+如果句子里出现“明天、周五、晚上 8 点、提醒我、开会、预约、截止、提交、出发”等明确未来安排信号，优先识别为 plan。
+如果只是闲聊、提问、感叹、表达感受，或者虽然提到时间但没有安排/提醒语义，不要识别为 plan，而应优先识别为 chat。
+
+返回格式：
 {
-  "activity": "吃午饭并买书",
-  "category": "Leisure",
-  "durationMinutes": 60,
-  "mood": "开心",
+  "intent": "chat | log | plan | finance",
+  "assistantReply": "当 intent=chat 时给用户的自然回复，其他情况可为空字符串",
+  "activity": "生活记录摘要，非 log 时可为空字符串",
+  "category": "Work | Leisure | Health | Chores | Social | Other",
+  "durationMinutes": 0,
+  "mood": "平静",
   "importance": 3,
-  "finance": [
-    { "type": "EXPENSE", "amount": 50, "category": "餐饮", "description": "午饭" },
-    { "type": "EXPENSE", "amount": 100, "category": "购物", "description": "买书" }
-  ]
-}`;
+  "finance": [],
+  "plan": {
+    "title": "计划标题",
+    "notes": "补充说明",
+    "planType": "reminder | event",
+    "startAt": 1743415200000,
+    "endAt": null,
+    "dueAt": null,
+    "isAllDay": false,
+    "reminderAt": null,
+    "syncTargetSuggestion": "ios-reminder | ios-calendar | none",
+    "confidence": 0.95
+  }
+}
 
-    const systemPromptEn = `You are a professional life logger and finance assistant. Your task is to extract activity metadata and financial transactions from user notes.
-Please return purely in JSON format, without Markdown formatting (like \`\`\`json).
+规则：
+1. 如果 intent 是 chat，必须返回 assistantReply，语气自然，像助理一样简洁回复。
+2. 如果 intent 是 plan，必须返回完整的 plan 对象。
+3. 有明确发生时间或时间段的安排，优先用 event。
+4. 只有提醒、截止、待办语义时，优先用 reminder。
+5. 相对时间要换算成时间戳毫秒。
+6. 如果 intent 是 log，按生活记录填写 activity、category、durationMinutes、mood、importance。`;
 
-1. **Life Log** (as root properties):
-   - activity: Activity summary (Please use English)
-   - category: Must be one of: Work, Leisure, Health, Chores, Social, Other.
-   - durationMinutes: Estimated duration (minutes)
-   - mood: Mood (e.g., Happy, Tired, Productive)
-   - importance: 1-5
+    const systemPromptEn = `You are a life assistant. Classify the user input into one of these intents:
+1. chat: casual conversation, questions, greetings, requests for advice, or emotional expression that should receive a direct assistant reply
+2. log: something that already happened or is happening
+3. plan: a future arrangement, reminder, meeting, task, appointment, or schedule item
+4. finance: mostly about income or expense
 
-2. **Finance Records** (put in 'finance' array, empty array if none):
-   - type: "EXPENSE" or "INCOME"
-   - amount: Amount (number)
-   - category: Category (e.g., Food, Transport, Shopping, Salary, Investment, etc.)
-   - description: Description
+Return pure JSON only, no Markdown.
+Current reference time: ${now.toISOString()}.
+Current user timezone: ${resolvedTimezone}.
 
-Return format example:
+If the sentence contains clear future scheduling signals like tomorrow, Friday, 8 PM, remind me, meeting, appointment, deadline, submit, or departure, prefer intent=plan.
+If the message is casual chat, a question, or general conversation without scheduling or reminder intent, do not classify it as plan. Prefer intent=chat.
+
+Return format:
 {
-  "activity": "Lunch and bought books",
-  "category": "Leisure",
-  "durationMinutes": 60,
-  "mood": "Happy",
+  "intent": "chat | log | plan | finance",
+  "assistantReply": "natural reply for the user when intent=chat, empty string otherwise",
+  "activity": "summary for log, empty string when not needed",
+  "category": "Work | Leisure | Health | Chores | Social | Other",
+  "durationMinutes": 0,
+  "mood": "Calm",
   "importance": 3,
-  "finance": [
-    { "type": "EXPENSE", "amount": 50, "category": "Food", "description": "Lunch" },
-    { "type": "EXPENSE", "amount": 100, "category": "Shopping", "description": "Books" }
-  ]
-}`;
+  "finance": [],
+  "plan": {
+    "title": "plan title",
+    "notes": "extra notes",
+    "planType": "reminder | event",
+    "startAt": 1743415200000,
+    "endAt": null,
+    "dueAt": null,
+    "isAllDay": false,
+    "reminderAt": null,
+    "syncTargetSuggestion": "ios-reminder | ios-calendar | none",
+    "confidence": 0.95
+  }
+}
+
+Rules:
+1. If intent is chat, you must return assistantReply in a concise, helpful assistant tone.
+2. If intent is plan, you must return a plan object.
+3. Use event for time-specific arrangements.
+4. Use reminder for to-do or deadline semantics.
+5. Convert relative time into unix milliseconds.
+6. If intent is log, fill activity, category, durationMinutes, mood, and importance.`;
 
     const response = await createChatCompletion({
       messages: [
         {
           role: "system",
-          content: isEn ? systemPromptEn : systemPromptZh
+          content: `${isEn ? systemPromptEn : systemPromptZh}\n\nHeuristic hint: ${planHint ? 'This input contains strong future scheduling or reminder signals. Prefer intent=plan unless clearly contradicted.' : chatHint ? 'This input looks like casual conversation or a direct question to the assistant. Prefer intent=chat unless there is explicit structured log, finance, or schedule intent.' : 'No strong scheduling intent detected. Use chat for conversation, log for life records, finance for money statements, and only use plan when there is explicit reminder or schedule intent.'}`
         },
+        ...(contextPrompt ? [{
+          role: "system",
+          content: isEn
+            ? `Recent conversation context. Use it to understand references, pronouns, and follow-up questions, but classify only the latest user input.\n${contextPrompt}`
+            : `最近对话上下文。请用它理解指代、省略和追问，但分类对象仍然只针对最新这句用户输入。\n${contextPrompt}`
+        }] : []),
         {
           role: "user",
-          content: `请将以下日常记录笔记解析为结构化的 JSON 对象： "${text}"`
+          content: `请将以下输入解析为结构化 JSON： "${text}"`
         }
       ],
       response_format: { type: "json_object" }
     });
 
     const parsedData = JSON.parse(response.choices[0].message.content);
+    const normalizedIntent = ['chat', 'log', 'plan', 'finance'].includes(parsedData.intent)
+      ? parsedData.intent
+      : (parsedData.plan ? 'plan' : parsedData.finance?.length ? 'finance' : chatHint ? 'chat' : 'log');
+
+    parsedData.intent = normalizedIntent;
+    parsedData.assistantReply = normalizedIntent === 'chat'
+      ? String(parsedData.assistantReply || '').trim() || buildDefaultAssistantReply(text, isEn)
+      : undefined;
+    parsedData.plan = normalizedIntent === 'plan'
+      ? applyRelativeDateOverride(normalizePlanPayload(parsedData.plan, text), text, resolvedTimezone)
+      : undefined;
+
+    if (parsedData.intent === 'plan' && !shouldAcceptPlanResult(text, parsedData.plan)) {
+      parsedData.intent = chatHint ? 'chat' : 'log';
+      parsedData.plan = undefined;
+      parsedData.assistantReply = parsedData.intent === 'chat'
+        ? String(parsedData.assistantReply || '').trim() || buildDefaultAssistantReply(text, isEn)
+        : undefined;
+    }
+
+    if (getPlanHeuristicProfile(text).strongPlan && !parsedData.plan) {
+      parsedData.intent = 'plan';
+      parsedData.plan = buildFallbackPlan(text, resolvedTimezone);
+      parsedData.assistantReply = undefined;
+    }
+
     res.json(parsedData);
   } catch (error) {
     console.error("AI Parse Error:", error);
