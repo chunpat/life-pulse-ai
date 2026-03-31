@@ -499,7 +499,7 @@ const App: React.FC = () => {
         />
       )}
       {view === ViewMode.FINANCE && (
-        <Finance userId={user.id} />
+        <Finance userId={user.id} onOpenLoggerComposer={handleOpenLoggerComposer} />
       )}
       {view === ViewMode.ANALYTICS && (
         <Analytics 

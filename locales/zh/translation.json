@@ -14,7 +14,10 @@
     "guest_limit_title": "已达到游客限制",
     "guest_limit_desc": "游客模式仅支持记录 3 条日常。为了持久保存您的记录并解锁 AI 汇总分析功能，请前往登录。",
     "login_register": "前往登录 / 注册",
-    "cancel_view": "再看看已记录的"
+    "cancel_view": "再看看已记录的",
+    "back_to_chat": "回到首页对话",
+    "cancel": "取消",
+    "confirm": "确认"
   },
   "app": {
     "title": "掌控生活",
@@ -50,6 +53,7 @@
   },
   "nav": {
     "logger": "记录",
+    "chat_home": "对话首页",
     "timeline": "回顾",
     "plan": "计划",
     "analytics": "分析",
@@ -61,6 +65,9 @@
     "eyebrow": "Plan",
     "title": "我的计划",
     "subtitle": "把待办、提醒和日程先放到应用内统一管理，再逐步接原生同步。",
+    "bridge_title": "想补一条新安排，还是从一句话开始最顺手",
+    "bridge_desc": "回到首页对话区，说一句像“明早九点和客户开会”这样的自然语言，系统会继续帮你识别成计划。",
+    "bridge_action": "回到对话继续说",
     "quick_add": "快速录入",
     "guest_hint": "计划模块默认面向登录用户；游客可以先通过记录入口体验一句话录入。",
     "tabs": {
@@ -192,6 +199,7 @@
     "multi_active_hint": "计划可以多个同时进行。今天写一次，会同步推进今天还没打卡的进行中计划。",
     "primary_hint": "只有一个主奖励计划会结算计划推进积分和完成奖励，你可以随时切换。",
     "delete_policy_hint": "删除规则：未开始的计划可直接删除；已开始的计划每月最多删除 1 次。",
+    "delete_success": "已删除这个目标",
     "primary_badge": "主奖励计划",
     "set_primary": "设为主奖励",
     "official_plan_badge": "官方计划",
@@ -518,12 +526,16 @@
   },
   "finance": {
     "title": "财务账本",
+    "bridge_title": "记账入口还是应该留在对话里",
+    "bridge_desc": "如果你想补一笔新消费或收入，直接回到首页说一句“中午咖啡 28”会更顺手，账本页继续负责查看和整理。",
+    "bridge_action": "回到对话记一笔",
     "filter": { "week": "本周", "month": "本月", "all": "全部" },
     "total_income": "总收入",
     "total_expense": "总支出",
     "chart_expense_category": "支出分类占比",
     "list_title": "记账清单",
     "delete_confirm": "确定删除?",
+    "delete_success": "已删除这条账目",
     "delete_failed": "删除失败",
     "no_records": { "week": "本周暂无记录", "month": "本月暂无记录", "all": "当前暂无记录" },
     "loading": "正在分析订单...",

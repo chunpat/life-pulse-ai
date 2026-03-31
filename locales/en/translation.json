@@ -14,7 +14,10 @@
     "guest_limit_title": "Guest Limit Reached",
     "guest_limit_desc": "Guest mode is limited to 3 entries. To save your logs permanently and unlock AI analysis, please log in.",
     "login_register": "Login / Register",
-    "cancel_view": "View Existing Logs"
+    "cancel_view": "View Existing Logs",
+    "back_to_chat": "Back to chat home",
+    "cancel": "Cancel",
+    "confirm": "Confirm"
   },
   "app": {
     "title": "LifePulse AI",
@@ -50,6 +53,7 @@
   },
   "nav": {
     "logger": "Log",
+    "chat_home": "Chat",
     "timeline": "History",
     "plan": "Plan",
     "analytics": "Analytics",
@@ -61,6 +65,9 @@
     "eyebrow": "Plan",
     "title": "My Plans",
     "subtitle": "Manage reminders and schedule items inside the app first, then connect native sync step by step.",
+    "bridge_title": "The fastest way to add something new is still a sentence",
+    "bridge_desc": "Go back to the chat home and say something like “Meet the client tomorrow at 9 AM”, and the assistant will keep turning it into a plan for you.",
+    "bridge_action": "Back to chat",
     "quick_add": "Quick Add",
     "guest_hint": "The plan module is designed for signed-in users. Guests can still try the natural-language composer from the log entry flow.",
     "tabs": {
@@ -192,6 +199,7 @@
     "multi_active_hint": "Plans can run at the same time. One log today advances every active plan that has not checked in yet.",
     "primary_hint": "Only one primary reward plan settles plan progress points and completion rewards at a time.",
     "delete_policy_hint": "Delete rule: plans without a first check-in can be deleted freely; started plans can be deleted only once per month.",
+    "delete_success": "The goal was deleted",
     "primary_badge": "Primary reward plan",
     "set_primary": "Make Primary",
     "official_plan_badge": "Official plan",
@@ -518,12 +526,16 @@
   },
   "finance": {
     "title": "Finance Ledger",
+    "bridge_title": "New money entries should still start from chat",
+    "bridge_desc": "If you want to add a new expense or income, jump back to the chat home and say something like “Coffee 28 at noon”. This page stays focused on review and cleanup.",
+    "bridge_action": "Back to chat to log",
     "filter": { "week": "Week", "month": "Month", "all": "All" },
     "total_income": "Total Income",
     "total_expense": "Total Expenses",
     "chart_expense_category": "Expense by Category",
     "list_title": "Records",
     "delete_confirm": "Are you sure you want to delete?",
+    "delete_success": "The finance record was deleted",
     "delete_failed": "Deletion failed",
     "no_records": { "week": "No records for this week", "month": "No records for this month", "all": "No records found" },
     "loading": "Analyzing orders...",

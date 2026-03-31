@@ -36,30 +36,59 @@ export const Layout: React.FC<LayoutProps> = ({
 
   const displayUserName = userName === '游客' ? t('common.guest_user') : userName;
   const isLoggerView = currentView === ViewMode.LOGGER;
+  const isSoftShellView = currentView === ViewMode.LOGGER || currentView === ViewMode.PLAN || currentView === ViewMode.FINANCE;
+  const currentViewLabel = currentView === ViewMode.LOGGER
+    ? t('nav.chat_home')
+    : currentView === ViewMode.PLAN
+      ? t('nav.plan')
+      : currentView === ViewMode.FINANCE
+        ? t('nav.finance')
+        : currentView === ViewMode.TIMELINE
+          ? t('nav.timeline')
+          : t('nav.analytics');
+  const nonLoggerNavItems = [
+    { view: ViewMode.LOGGER, label: t('nav.chat_home'), icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h8M8 14h5m7 5l-3.8-2.1a2 2 0 00-.96-.24H6a3 3 0 01-3-3V7a3 3 0 013-3h12a3 3 0 013 3v6a3 3 0 01-3 3h-.24a2 2 0 00-.96.24L13 19z" /></svg> },
+    { view: ViewMode.TIMELINE, label: t('nav.timeline'), icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> },
+    { view: ViewMode.PLAN, label: t('nav.plan'), icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10m-11 9h12a2 2 0 002-2V7a2 2 0 00-2-2H6a2 2 0 00-2 2v11a2 2 0 002 2z" /></svg> },
+    { view: ViewMode.FINANCE, label: t('nav.finance'), icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg> },
+    { view: ViewMode.ANALYTICS, label: t('nav.analytics'), icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg> }
+  ];
 
   return (
     // Outer Container - Desktop centered, Mobile full
-    <div className={`fixed inset-0 sm:flex sm:items-center sm:justify-center ${isLoggerView ? 'bg-[#f6f1e8]' : 'bg-slate-100'}`}>
+    <div className={`fixed inset-0 sm:flex sm:items-center sm:justify-center ${isSoftShellView ? 'bg-[#f6f1e8]' : 'bg-slate-100'}`}>
       
       {/* App Shell */}
-      <div className={`w-full h-full sm:h-[850px] sm:max-w-[400px] overflow-hidden flex flex-col relative transform-gpu ${isLoggerView ? 'bg-[radial-gradient(circle_at_top,#fff7e8_0%,#fffdf9_38%,#f8fafc_100%)] sm:rounded-[3rem] sm:shadow-2xl sm:border-[8px] sm:border-slate-900' : 'bg-slate-50 sm:rounded-[3rem] sm:shadow-2xl sm:border-[8px] sm:border-slate-900'}`}>
+      <div className={`w-full h-full sm:h-[850px] sm:max-w-[400px] overflow-hidden flex flex-col relative transform-gpu ${isSoftShellView ? 'bg-[radial-gradient(circle_at_top,#fff7e8_0%,#fffdf9_38%,#f8fafc_100%)] sm:rounded-[3rem] sm:shadow-2xl sm:border-[8px] sm:border-slate-900' : 'bg-slate-50 sm:rounded-[3rem] sm:shadow-2xl sm:border-[8px] sm:border-slate-900'}`}>
         
         {/* Onboarding Guide Overlay */}
         {showGuide && <OnboardingGuide onGenericClose={onCloseGuide} />}
 
         {/* Dynamic Header */}
-        <header className={`sticky top-0 z-20 ${isLoggerView ? 'border-b-0 bg-transparent px-4 py-4' : 'border-b border-slate-100 bg-white/80 px-6 py-6 backdrop-blur-md'}`}>
+        <header className={`sticky top-0 z-20 ${isSoftShellView ? 'border-b-0 bg-transparent px-4 py-4' : 'border-b border-slate-100 bg-white/80 px-6 py-6 backdrop-blur-md'}`}>
           <div className="flex items-center justify-between">
-            {isLoggerView ? (
+            {isSoftShellView ? (
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={onOpenLoggerSidebar}
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white/95 text-slate-700 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
-                  title={t('logger.sidebar_menu_title')}
-                >
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7h16M4 12h16M4 17h10" /></svg>
-                </button>
+                {isLoggerView ? (
+                  <button
+                    type="button"
+                    onClick={onOpenLoggerSidebar}
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white/95 text-slate-700 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+                    title={t('logger.sidebar_menu_title')}
+                  >
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7h16M4 12h16M4 17h10" /></svg>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onViewChange(ViewMode.LOGGER)}
+                    className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white/95 px-3 text-slate-700 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+                    title={t('common.back_to_chat')}
+                  >
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h8M8 14h5m7 5l-3.8-2.1a2 2 0 00-.96-.24H6a3 3 0 01-3-3V7a3 3 0 013-3h12a3 3 0 013 3v6a3 3 0 01-3 3h-.24a2 2 0 00-.96.24L13 19z" /></svg>
+                    <span className="text-xs font-black">{t('common.back_to_chat')}</span>
+                  </button>
+                )}
                 <div className="flex items-center gap-2 rounded-full bg-white/80 px-3 py-2 shadow-sm backdrop-blur-md ring-1 ring-amber-100">
                   <span className="inline-flex h-2 w-2 rounded-full bg-amber-400" />
                   <div>
@@ -67,7 +96,7 @@ export const Layout: React.FC<LayoutProps> = ({
                       {t('app.title')} <span className="text-amber-600">AI</span>
                     </h1>
                     <p className="text-[10px] font-bold tracking-wide text-slate-500">
-                      {displayUserName}
+                      {isLoggerView ? displayUserName : `${displayUserName} · ${currentViewLabel}`}
                     </p>
                   </div>
                 </div>
@@ -84,26 +113,27 @@ export const Layout: React.FC<LayoutProps> = ({
             )}
             
             <div className="flex items-center gap-2">
-              <button 
-                id="nav-finance"
-                onClick={() => {
-                  onViewChange(ViewMode.FINANCE);
-                  setIsMenuOpen(false);
-                }}
-                className={`p-2 rounded-full transition-colors ${isLoggerView ? (currentView === ViewMode.FINANCE ? 'bg-amber-500 text-white' : 'bg-white/80 text-slate-600 ring-1 ring-slate-200 hover:bg-amber-50') : (currentView === ViewMode.FINANCE ? 'bg-amber-100 text-amber-700' : 'hover:bg-slate-100 text-slate-400')}`}
-                title={t('nav.finance')}
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
-              </button>
-
               {isLoggerView && (
-                <button
-                  onClick={() => onViewChange(ViewMode.PLAN)}
-                  className={`p-2 rounded-full transition-colors ${currentView === ViewMode.PLAN ? 'bg-amber-500 text-white' : 'bg-white/80 text-slate-600 ring-1 ring-slate-200 hover:bg-amber-50'}`}
-                  title={t('nav.plan')}
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10m-11 9h12a2 2 0 002-2V7a2 2 0 00-2-2H6a2 2 0 00-2 2v11a2 2 0 002 2z" /></svg>
-                </button>
+                <>
+                  <button 
+                    id="nav-finance"
+                    onClick={() => {
+                      onViewChange(ViewMode.FINANCE);
+                      setIsMenuOpen(false);
+                    }}
+                    className={`p-2 rounded-full transition-colors ${currentView === ViewMode.FINANCE ? 'bg-amber-500 text-white' : 'bg-white/80 text-slate-600 ring-1 ring-slate-200 hover:bg-amber-50'}`}
+                    title={t('nav.finance')}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
+                  </button>
+                  <button
+                    onClick={() => onViewChange(ViewMode.PLAN)}
+                    className={`p-2 rounded-full transition-colors ${currentView === ViewMode.PLAN ? 'bg-amber-500 text-white' : 'bg-white/80 text-slate-600 ring-1 ring-slate-200 hover:bg-amber-50'}`}
+                    title={t('nav.plan')}
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10m-11 9h12a2 2 0 002-2V7a2 2 0 00-2-2H6a2 2 0 00-2 2v11a2 2 0 002 2z" /></svg>
+                  </button>
+                </>
               )}
 
               <div className="relative">
@@ -166,95 +196,65 @@ export const Layout: React.FC<LayoutProps> = ({
               </div>
             </div>
           </div>
+
+          {!isLoggerView && (
+            <div className="mt-4 overflow-x-auto scrollbar-hide">
+              <div className="inline-flex min-w-full gap-2 rounded-[1.4rem] bg-white/70 p-1.5 shadow-sm ring-1 ring-white/80 backdrop-blur">
+                {nonLoggerNavItems.map((item) => (
+                  <button
+                    key={item.view}
+                    type="button"
+                    onClick={() => onViewChange(item.view)}
+                    className={`inline-flex flex-1 items-center justify-center gap-2 rounded-[1rem] px-3 py-2 text-xs font-black transition-colors ${currentView === item.view ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    {item.icon}
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </header>
 
         {/* Scrollable Content Area */}
-          <main className={`flex-1 overflow-y-auto scrollbar-hide ${isLoggerView ? 'bg-transparent pb-0' : 'bg-slate-50 pb-28'}`}>
-            <div className={`${isLoggerView ? 'h-full min-h-full px-0 pt-0 pb-0' : 'px-4 py-4 min-h-full'}`}>
+          <main className={`flex-1 overflow-y-auto scrollbar-hide ${isSoftShellView ? 'bg-transparent pb-24' : 'bg-slate-50 pb-24'}`}>
+            <div className={`${isLoggerView ? 'h-full min-h-full px-0 pt-0 pb-0' : 'px-4 py-2 min-h-full'}`}>
             {children}
            </div>
         </main>
 
-        {/* Floating Bottom Navigation */}
+        {/* Floating Composer Button */}
           {!isLoggerView && (
-          <nav className="absolute bottom-6 left-4 right-4 h-16 bg-white/90 backdrop-blur-xl rounded-2xl shadow-lg border border-white/20 flex items-center justify-between px-6 z-30">
-          
-          {/* Recent/Timeline */}
-          <NavButton
-            id="nav-history"
-            active={currentView === ViewMode.TIMELINE}
-            onClick={() => onViewChange(ViewMode.TIMELINE)}
-            label={t('nav.timeline')}
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-          </NavButton>
-
-          <NavButton
-            id="nav-plan"
-            active={currentView === ViewMode.PLAN}
-            onClick={() => onViewChange(ViewMode.PLAN)}
-            label={t('nav.plan')}
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10m-11 9h12a2 2 0 002-2V7a2 2 0 00-2-2H6a2 2 0 00-2 2v11a2 2 0 002 2z" /></svg>
-          </NavButton>
-
-          {/* ADD BUTTON (Floating outside) */}
-          <div className="relative -top-8">
+          <div className="pointer-events-none absolute inset-x-0 bottom-6 z-30 flex justify-center px-4">
+          <div className="pointer-events-auto relative flex items-center gap-2 rounded-full border border-slate-200 bg-white/92 px-2 py-2 shadow-2xl shadow-slate-200/70 backdrop-blur-xl">
             <button
               id="nav-logger"
-              onClick={onOpenLoggerComposer}
-              title={t('nav.logger')}
-              className={`
-                w-14 h-14 rounded-full flex items-center justify-center 
-                shadow-xl shadow-amber-300/40 border-4 border-slate-50 
-                transition-all duration-300 ease-out transform
-                ${currentView === ViewMode.LOGGER 
-                  ? 'bg-amber-500 scale-110 rotate-90 text-slate-950' 
-                  : 'bg-slate-900 hover:bg-slate-800 text-white hover:-translate-y-1'}
-              `}
+              onClick={() => onViewChange(ViewMode.LOGGER)}
+              title={t('nav.chat_home')}
+              className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-900 text-white transition-all duration-300 ease-out hover:-translate-y-0.5 hover:bg-slate-800"
             >
-              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" /></svg>
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M8 10h8M8 14h5m7 5l-3.8-2.1a2 2 0 00-.96-.24H6a3 3 0 01-3-3V7a3 3 0 013-3h12a3 3 0 013 3v6a3 3 0 01-3 3h-.24a2 2 0 00-.96.24L13 19z" /></svg>
             </button>
-            
-            {/* Success Indicator Pulse */}
+            <button
+              type="button"
+              onClick={() => onViewChange(ViewMode.LOGGER)}
+              className="pr-3 text-left"
+            >
+              <span className="block text-[10px] font-black uppercase tracking-[0.18em] text-amber-600">{t('nav.chat_home')}</span>
+              <span className="block text-sm font-black text-slate-900">{t('common.back_to_chat')}</span>
+            </button>
+
             {newLogAdded && (
-               <>
-                <span className="absolute -top-2 -right-2 flex h-6 w-6">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-6 w-6 bg-green-500 items-center justify-center text-[10px] text-white font-bold">✓</span>
-                </span>
-               </>
+              <span className="absolute -top-2 -right-2 flex h-6 w-6">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-6 w-6 bg-green-500 items-center justify-center text-[10px] text-white font-bold">✓</span>
+              </span>
             )}
           </div>
-
-          {/* Analytics */}
-          <NavButton
-            id="nav-analytics"
-            active={currentView === ViewMode.ANALYTICS}
-            onClick={() => onViewChange(ViewMode.ANALYTICS)}
-            label={t('nav.analytics')}
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
-          </NavButton>
-
-        </nav>
+        </div>
         )}
       </div>
     </div>
   );
 };
-
-const NavButton: React.FC<{ id?: string; active: boolean; onClick: () => void; children: React.ReactNode; label: string }> = ({ id, active, onClick, children, label }) => (
-  <button
-    id={id}
-    onClick={onClick}
-    className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-all duration-300 ${
-      active ? 'text-amber-700 bg-amber-50/80 scale-105' : 'text-slate-400 hover:text-slate-600'
-    }`}
-  >
-    {children}
-    {/* Label is hidden on very small screens if needed, but useful here */}
-    <span className={`text-[10px] font-bold tracking-wide transition-opacity duration-300 ${active ? 'opacity-100' : 'opacity-70'}`}>{label}</span>
-  </button>
-);
 
