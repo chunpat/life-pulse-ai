@@ -8,12 +8,30 @@ const router = express.Router();
 
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const messages = await ChatMessage.findAll({
-      where: { userId: req.user.id },
-      order: [['timestamp', 'ASC']]
+    const requestedLimit = Number.parseInt(String(req.query.limit || '20'), 10);
+    const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 100) : 20;
+    const beforeTimestamp = Number.parseInt(String(req.query.beforeTimestamp || ''), 10);
+    const where = {
+      userId: req.user.id,
+      ...(Number.isFinite(beforeTimestamp)
+        ? {
+            timestamp: {
+              [Op.lt]: beforeTimestamp
+            }
+          }
+        : {})
+    };
+
+    const rows = await ChatMessage.findAll({
+      where,
+      order: [['timestamp', 'DESC']],
+      limit: limit + 1
     });
 
-    res.json(messages);
+    const hasMore = rows.length > limit;
+    const messages = (hasMore ? rows.slice(0, limit) : rows).reverse();
+
+    res.json({ messages, hasMore });
   } catch (error) {
     res.status(500).json({ message: '获取聊天记录失败', error: error.message });
   }

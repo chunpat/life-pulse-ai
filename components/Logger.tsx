@@ -29,8 +29,14 @@ const OFFICIAL_ACCENT_COLOR_MAP: Record<string, string> = {
 };
 
 const DRAFT_STORAGE_KEY = 'lifepulse_unconfirmed_draft';
+const DISMISSED_SMART_SUGGESTION_KEY = 'lifepulse_dismissed_smart_suggestion';
 const DRAFT_STALE_HOURS = 24;
 const UNDO_WINDOW_MS = 5 * 60 * 1000;
+
+const getSuggestionKey = (suggestion: { content: string; type: string; trigger: string } | null) => {
+  if (!suggestion) return '';
+  return `${suggestion.type}::${suggestion.trigger}::${suggestion.content}`;
+};
 
 function persistUnconfirmedDraft(draft: NonNullable<ReturnType<typeof buildDraftPreview>>) {
   try {
@@ -113,15 +119,19 @@ interface LoggerProps {
   isGuest?: boolean;
   logs: LogEntry[]; // Changed from logsCount to logs array
   chatMessages: ChatMessage[];
+  hasMoreChatMessages?: boolean;
   goals: Goal[];
   rewardProfile?: RewardProfile | null;
   sidebarOpenRequestKey?: number;
+  sidebarOpenTab?: 'goals' | 'record-add';
   isComposerOpen: boolean;
   isGoalActionLoading?: boolean;
+  isLoadingOlderChatMessages?: boolean;
   onOpenComposer: () => void;
   onCloseComposer: () => void;
   onCreateGoal: (goalInput: GoalCreateInput) => Promise<void>;
   onCreateChatMessage: (message: { id?: string; role: 'user' | 'assistant'; content: string; messageType?: 'text' | 'confirmation'; timestamp?: number; metadata?: Record<string, unknown> }) => Promise<void>;
+  onLoadOlderChatMessages: () => Promise<void>;
   onDeleteChatMessages: (messageIds: string[]) => Promise<void>;
   onCreatePlan: (planInput: PlanCreateInput) => Promise<Plan | undefined>;
   onDeleteLog: (logId: string) => Promise<void>;
@@ -139,15 +149,19 @@ const Logger: React.FC<LoggerProps> = ({
   isGuest = false,
   logs,
   chatMessages,
+  hasMoreChatMessages = false,
   goals,
   rewardProfile,
   sidebarOpenRequestKey = 0,
+  sidebarOpenTab = 'goals',
   isComposerOpen,
   isGoalActionLoading = false,
+  isLoadingOlderChatMessages = false,
   onOpenComposer,
   onCloseComposer,
   onCreateGoal,
   onCreateChatMessage,
+  onLoadOlderChatMessages,
   onDeleteChatMessages,
   onCreatePlan,
   onDeleteLog,
@@ -163,6 +177,7 @@ const Logger: React.FC<LoggerProps> = ({
   const [draftTriggerMessageId, setDraftTriggerMessageId] = useState<string | null>(null);
   const [draftPendingMessageId, setDraftPendingMessageId] = useState<string | null>(null);
   const [suggestion, setSuggestion] = useState<{content: string, type: string, trigger: string} | null>(null);
+  const [dismissedSuggestionKey, setDismissedSuggestionKey] = useState(() => localStorage.getItem(DISMISSED_SMART_SUGGESTION_KEY) || '');
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
@@ -188,8 +203,14 @@ const Logger: React.FC<LoggerProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const inlineInputRef = useRef<HTMLInputElement>(null);
+  const chatLoadTopRef = useRef<HTMLDivElement>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
+  const chatScrollRootRef = useRef<HTMLElement | null>(null);
   const hasInitialAutoScrollRef = useRef(false);
+  const isPrependingChatHistoryRef = useRef(false);
+  const hasUserScrolledAwayFromBottomRef = useRef(false);
+  const lastChatScrollTopRef = useRef(0);
+  const previousChatHeightRef = useRef<number | null>(null);
   const voiceTranscriptRef = useRef('');
   const voiceDraftRef = useRef('');
   const shouldRestartListeningRef = useRef(false);
@@ -204,7 +225,7 @@ const Logger: React.FC<LoggerProps> = ({
   const todayKey = formatDateKey(Date.now());
 
   const recentConversation = logs.slice(0, 6).reverse();
-  const recentChatMessages = chatMessages.slice(-12);
+  const recentChatMessages = chatMessages;
   const timelineLogs = [...recentConversation].sort((a, b) => b.timestamp - a.timestamp);
   const timelineGroups = buildTimelineGroups(timelineLogs);
   const latestPendingPreviewId = [...recentChatMessages]
@@ -223,11 +244,14 @@ const Logger: React.FC<LoggerProps> = ({
       return message.timestamp + UNDO_WINDOW_MS > currentTime;
     })?.id || null;
   const isCurrentDraftExpired = draftParse ? isDraftExpired(draftParse, currentTime) : false;
+  const activeSuggestionKey = getSuggestionKey(suggestion);
+  const shouldShowFloatingSuggestion = Boolean(suggestion) && activeSuggestionKey !== dismissedSuggestionKey && !isComposerOpen;
 
   useEffect(() => {
     if (!sidebarOpenRequestKey) return;
+    setSidebarTab(sidebarOpenTab);
     setShowGoalDrawer(true);
-  }, [sidebarOpenRequestKey]);
+  }, [sidebarOpenRequestKey, sidebarOpenTab]);
 
   useEffect(() => {
     const persisted = loadPersistedDraft();
@@ -246,7 +270,8 @@ const Logger: React.FC<LoggerProps> = ({
 
     if (cachedSuggestion && lastFetch && now - Number(lastFetch) < 4 * 60 * 60 * 1000) {
       try {
-        setSuggestion(JSON.parse(cachedSuggestion));
+        const parsedSuggestion = JSON.parse(cachedSuggestion);
+        setSuggestion(parsedSuggestion);
         return;
       } catch (error) {
         console.warn('Failed to read cached suggestion', error);
@@ -401,6 +426,48 @@ const Logger: React.FC<LoggerProps> = ({
   }, [isListening]);
 
   useEffect(() => {
+    const root = chatBottomRef.current?.closest('main');
+    if (!root) return;
+
+    const scrollRoot = root as HTMLElement;
+    chatScrollRootRef.current = scrollRoot;
+    lastChatScrollTopRef.current = scrollRoot.scrollTop;
+
+    const updateScrollIntent = () => {
+      const distanceFromBottom = scrollRoot.scrollHeight - (scrollRoot.scrollTop + scrollRoot.clientHeight);
+      const hasScrolledUp = scrollRoot.scrollTop < lastChatScrollTopRef.current;
+
+      if (distanceFromBottom <= 24) {
+        hasUserScrolledAwayFromBottomRef.current = false;
+      } else if (hasScrolledUp) {
+        hasUserScrolledAwayFromBottomRef.current = true;
+      }
+
+      lastChatScrollTopRef.current = scrollRoot.scrollTop;
+    };
+
+    scrollRoot.addEventListener('scroll', updateScrollIntent, { passive: true });
+
+    return () => {
+      scrollRoot.removeEventListener('scroll', updateScrollIntent);
+      if (chatScrollRootRef.current === scrollRoot) {
+        chatScrollRootRef.current = null;
+      }
+    };
+  }, [recentChatMessages.length]);
+
+  useEffect(() => {
+    if (isPrependingChatHistoryRef.current) {
+      const scrollContainer = chatBottomRef.current?.closest('main');
+      if (scrollContainer && previousChatHeightRef.current !== null) {
+        const nextHeight = scrollContainer.scrollHeight;
+        scrollContainer.scrollTop += nextHeight - previousChatHeightRef.current;
+      }
+      previousChatHeightRef.current = null;
+      isPrependingChatHistoryRef.current = false;
+      return;
+    }
+
     const scrollBehavior = hasInitialAutoScrollRef.current ? 'smooth' : 'auto';
     const timer = window.setTimeout(() => {
       chatBottomRef.current?.scrollIntoView({ behavior: scrollBehavior, block: 'end' });
@@ -409,6 +476,47 @@ const Logger: React.FC<LoggerProps> = ({
 
     return () => window.clearTimeout(timer);
   }, [recentChatMessages.length, draftParse, uploadedImages.length, isProcessing, isListening, inputText, showInlineKeyboard]);
+
+  const handleRequestOlderChatMessages = () => {
+    const root = chatScrollRootRef.current || chatBottomRef.current?.closest('main');
+    if (!root || isLoadingOlderChatMessages) return;
+
+    previousChatHeightRef.current = root.scrollHeight;
+    isPrependingChatHistoryRef.current = true;
+    hasUserScrolledAwayFromBottomRef.current = false;
+    void onLoadOlderChatMessages();
+  };
+
+  useEffect(() => {
+    if (!hasMoreChatMessages) return;
+
+    const root = chatBottomRef.current?.closest('main');
+    const target = chatLoadTopRef.current;
+    if (!root || !target) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const firstEntry = entries[0];
+        if (!firstEntry?.isIntersecting || isLoadingOlderChatMessages) return;
+        if (!hasUserScrolledAwayFromBottomRef.current) return;
+        if (root.scrollHeight <= root.clientHeight + 24) return;
+
+        previousChatHeightRef.current = root.scrollHeight;
+        isPrependingChatHistoryRef.current = true;
+        hasUserScrolledAwayFromBottomRef.current = false;
+        void onLoadOlderChatMessages();
+      },
+      {
+        root,
+        threshold: 0.1,
+        rootMargin: '120px 0px 0px 0px'
+      }
+    );
+
+    observer.observe(target);
+
+    return () => observer.disconnect();
+  }, [hasMoreChatMessages, isLoadingOlderChatMessages, onLoadOlderChatMessages, recentChatMessages.length]);
 
   useEffect(() => {
     if (!notice) return;
@@ -435,6 +543,12 @@ const Logger: React.FC<LoggerProps> = ({
 
   const showNotice = (message: string, tone: 'success' | 'error' | 'info' = 'info') => {
     setNotice({ message, tone });
+  };
+
+  const handleDismissSuggestion = () => {
+    if (!activeSuggestionKey) return;
+    localStorage.setItem(DISMISSED_SMART_SUGGESTION_KEY, activeSuggestionKey);
+    setDismissedSuggestionKey(activeSuggestionKey);
   };
 
   const analyzeTextInput = async (text: string, options?: { openComposer?: boolean }) => {
@@ -1083,35 +1197,60 @@ const Logger: React.FC<LoggerProps> = ({
 
       <div className="flex-1 px-4 pb-44 pt-2 sm:pb-40">
         <div className="space-y-4">
-          {suggestion && (
-            <div className="max-w-[86%] rounded-[1.6rem] rounded-bl-md border border-amber-300/20 bg-amber-50 px-4 py-3 shadow-sm">
-              <div className="flex items-start gap-3 relative overflow-hidden group">
-                <div className="p-2 bg-amber-100 rounded-lg text-xl flex-none">
-                  {suggestion.type === 'health' ? '🌿' : suggestion.type === 'productivity' ? '🚀' : suggestion.type === 'work_life_balance' ? '⚖️' : '💡'}
-                </div>
-                <div className="flex-1 z-10">
-                  <h4 className="text-xs font-bold text-amber-700 uppercase tracking-widest mb-0.5">{t('logger.smart_suggestion')}</h4>
-                  <p className="text-sm font-medium text-slate-700 leading-snug">{suggestion.content}</p>
-                </div>
-                <button
-                  onClick={() => {
-                    setSuggestion(null);
-                    localStorage.removeItem('current_suggestion');
-                  }}
-                  className="text-slate-300 hover:text-slate-500 z-10 p-1"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-              </div>
-            </div>
-          )}
-
           <div className="space-y-3">
+            {(hasMoreChatMessages || isLoadingOlderChatMessages) && (
+              <div ref={chatLoadTopRef} className="flex justify-center py-2">
+                {isLoadingOlderChatMessages ? (
+                  <div className="rounded-full bg-white/90 px-3 py-1 text-[11px] font-bold text-slate-500 ring-1 ring-slate-200 shadow-sm">
+                    {t('logger.loading_previous_messages', '正在加载更早对话...')}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleRequestOlderChatMessages}
+                    className="rounded-full bg-white/90 px-3 py-1 text-[11px] font-bold text-slate-500 ring-1 ring-slate-200 shadow-sm transition-colors hover:text-slate-700"
+                  >
+                    {t('logger.pull_up_for_history', '上滑可加载更早对话')}
+                  </button>
+                )}
+              </div>
+            )}
+
             <div className="flex justify-start">
               <div className="max-w-[84%] rounded-[1.6rem] rounded-bl-md bg-white px-4 py-3 text-sm leading-relaxed text-slate-700 shadow-sm ring-1 ring-slate-200">
                 {t('logger.chat_assistant_intro')}
               </div>
             </div>
+
+            {shouldShowFloatingSuggestion && suggestion && (
+              <div className="pointer-events-none sticky top-2 z-[19] h-0 overflow-visible px-1">
+                <div className="pointer-events-auto mx-auto w-full max-w-[400px]">
+                  <div className="rounded-[1.6rem] border border-amber-200/80 bg-amber-50/95 px-4 py-3 shadow-xl shadow-amber-100/70 backdrop-blur-md">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-amber-100 text-xl">
+                        {suggestion.type === 'health' ? '🌿' : suggestion.type === 'productivity' ? '🚀' : suggestion.type === 'work_life_balance' ? '⚖️' : '💡'}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">{t('logger.smart_suggestion')}</p>
+                            <p className="mt-1 text-sm font-medium leading-snug text-slate-700">{suggestion.content}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleDismissSuggestion}
+                            className="rounded-full p-1 text-slate-300 transition-colors hover:text-slate-500"
+                            aria-label={t('common.cancel', '关闭')}
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {recentChatMessages.map((message, index: number) => {
               const prevMessage = index > 0 ? recentChatMessages[index - 1] : null;

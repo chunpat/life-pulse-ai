@@ -17,12 +17,15 @@ import { fetchRewardBadges, fetchRewardLedger, fetchRewardProfile } from './serv
 
 const GUEST_STORAGE_USER = 'guest_user_v1';
 const AUTH_TOKEN = 'lifepulse_token';
+const CHAT_PAGE_SIZE = 20;
 
 const App: React.FC = () => {
   const [view, setView] = useState<ViewMode>(ViewMode.LOGGER);
   const [isLoggerComposerOpen, setIsLoggerComposerOpen] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [hasMoreChatMessages, setHasMoreChatMessages] = useState(false);
+  const [isLoadingOlderChatMessages, setIsLoadingOlderChatMessages] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [newLogAdded, setNewLogAdded] = useState(false);
@@ -37,6 +40,7 @@ const App: React.FC = () => {
   const [showGuide, setShowGuide] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const [loggerSidebarOpenTick, setLoggerSidebarOpenTick] = useState(0);
+  const [loggerSidebarTab, setLoggerSidebarTab] = useState<'goals' | 'record-add'>('goals');
   const lastAnalyzedFingerprint = React.useRef<string>('');
 
   // 初始化用户状态
@@ -71,7 +75,7 @@ const App: React.FC = () => {
       try {
         const [logData, chatData, goalData, planData, rewardData, rewardBadgesData, rewardLedgerData] = await Promise.all([
           storageService.getLogs(),
-          fetchChatMessages(),
+          fetchChatMessages({ limit: CHAT_PAGE_SIZE }),
           user.status === 'authenticated' ? fetchGoals() : Promise.resolve([]),
           user.status === 'authenticated' ? fetchPlans() : Promise.resolve([]),
           user.status === 'authenticated' ? fetchRewardProfile() : Promise.resolve(null),
@@ -79,7 +83,8 @@ const App: React.FC = () => {
           user.status === 'authenticated' ? fetchRewardLedger(20) : Promise.resolve([])
         ]);
         setLogs(logData);
-        setChatMessages(chatData);
+        setChatMessages(chatData.messages);
+        setHasMoreChatMessages(chatData.hasMore);
         setGoals(goalData);
         setPlans(planData);
         setRewardProfile(rewardData);
@@ -102,7 +107,7 @@ const App: React.FC = () => {
       // 重新拉取最新的云端数据
       const [updatedLogs, updatedChatMessages, updatedGoals, updatedPlans, updatedRewardProfile, updatedRewardBadges, updatedRewardLedger] = await Promise.all([
         storageService.getLogs(),
-        fetchChatMessages(),
+        fetchChatMessages({ limit: CHAT_PAGE_SIZE }),
         fetchGoals(),
         fetchPlans(),
         fetchRewardProfile(),
@@ -110,7 +115,8 @@ const App: React.FC = () => {
         fetchRewardLedger(20)
       ]);
       setLogs(updatedLogs);
-      setChatMessages(updatedChatMessages);
+      setChatMessages(updatedChatMessages.messages);
+      setHasMoreChatMessages(updatedChatMessages.hasMore);
       setGoals(updatedGoals);
       setPlans(updatedPlans);
       setRewardProfile(updatedRewardProfile);
@@ -131,6 +137,8 @@ const App: React.FC = () => {
     setGoals([]);
     setPlans([]);
     setChatMessages([]);
+    setHasMoreChatMessages(false);
+    setIsLoadingOlderChatMessages(false);
     setRewardProfile(null);
     setRewardBadges([]);
     setRewardLedger([]);
@@ -141,6 +149,8 @@ const App: React.FC = () => {
     setGoals([]);
     setPlans([]);
     setChatMessages([]);
+    setHasMoreChatMessages(false);
+    setIsLoadingOlderChatMessages(false);
     setRewardProfile(null);
     setRewardBadges([]);
     setRewardLedger([]);
@@ -159,8 +169,10 @@ const App: React.FC = () => {
     setIsLoggerComposerOpen(true);
   }, []);
 
-  const handleOpenLoggerSidebar = useCallback(() => {
+  const handleOpenLoggerSidebar = useCallback((tab: 'goals' | 'record-add' = 'goals') => {
     setView(ViewMode.LOGGER);
+    setLoggerSidebarTab(tab);
+    setIsLoggerComposerOpen(false);
     setLoggerSidebarOpenTick((prev) => prev + 1);
   }, []);
 
@@ -221,6 +233,37 @@ const App: React.FC = () => {
     setChatMessages((prev) => prev.filter((msg) => !messageIds.includes(msg.id)));
     await deleteChatMessages(messageIds);
   }, []);
+
+  const handleLoadOlderChatMessages = useCallback(async () => {
+    if (isLoadingOlderChatMessages || !hasMoreChatMessages || chatMessages.length === 0) {
+      return;
+    }
+
+    const oldestTimestamp = chatMessages[0]?.timestamp;
+    if (typeof oldestTimestamp !== 'number') {
+      return;
+    }
+
+    setIsLoadingOlderChatMessages(true);
+    try {
+      const page = await fetchChatMessages({
+        limit: CHAT_PAGE_SIZE,
+        beforeTimestamp: oldestTimestamp
+      });
+      setChatMessages((prev) => {
+        const messageMap = new Map<string, ChatMessage>();
+        [...page.messages, ...prev].forEach((message) => {
+          messageMap.set(message.id, message);
+        });
+        return Array.from(messageMap.values()).sort((a, b) => a.timestamp - b.timestamp);
+      });
+      setHasMoreChatMessages(page.hasMore);
+    } catch (error) {
+      console.error('Load older chat messages error:', error);
+    } finally {
+      setIsLoadingOlderChatMessages(false);
+    }
+  }, [chatMessages, hasMoreChatMessages, isLoadingOlderChatMessages]);
 
   const refreshRewards = useCallback(async () => {
     if (!user || user.status !== 'authenticated') {
@@ -454,6 +497,7 @@ const App: React.FC = () => {
       onOpenLoggerSidebar={handleOpenLoggerSidebar}
       newLogAdded={newLogAdded}
       userName={user.name}
+      isGuest={user.status === 'guest'}
       onLogout={handleLogout}
       showGuide={showGuide}
       onCloseGuide={handleCloseGuide}
@@ -467,15 +511,19 @@ const App: React.FC = () => {
           isGuest={user.status === 'guest'}
           logs={logs}
           chatMessages={chatMessages}
+          hasMoreChatMessages={hasMoreChatMessages}
+          isLoadingOlderChatMessages={isLoadingOlderChatMessages}
           goals={goals}
           rewardProfile={rewardProfile}
           sidebarOpenRequestKey={loggerSidebarOpenTick}
+          sidebarOpenTab={loggerSidebarTab}
           isComposerOpen={isLoggerComposerOpen}
           isGoalActionLoading={isGoalMutating}
           onOpenComposer={handleOpenLoggerComposer}
           onCloseComposer={handleCloseLoggerComposer}
           onCreateGoal={handleCreateGoal}
           onCreateChatMessage={handleCreateChatMessage}
+          onLoadOlderChatMessages={handleLoadOlderChatMessages}
           onDeleteChatMessages={handleDeleteChatMessages}
           onCreatePlan={handleCreatePlan}
           onDeleteLog={deleteLog}
