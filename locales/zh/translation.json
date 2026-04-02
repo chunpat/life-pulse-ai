@@ -78,6 +78,17 @@
     "bridge_action": "回到对话继续说",
     "quick_add": "快速录入",
     "guest_hint": "计划模块默认面向登录用户；游客可以先通过记录入口体验一句话录入。",
+    "views": {
+      "board": "任务流",
+      "schedule": "时间表"
+    },
+    "filters": {
+      "all": "全部",
+      "pending": "待处理",
+      "overdue": "已超时",
+      "completed": "已完成",
+      "cancelled": "已取消"
+    },
     "tabs": {
       "today": "今日",
       "calendar": "日历",
@@ -86,16 +97,25 @@
     "today_title": "今天的安排",
     "today_desc": "先把今天要做的和今天会发生的放在一起看。",
     "calendar_desc": "第一版先支持月历和当天抽屉。",
+    "schedule_title": "本周任务时间表",
+    "schedule_desc": "切到时间轴后，直接按天查看这周的安排密度和时间块。",
     "day_drawer_title": "当天计划",
     "empty_today_title": "今天还没有计划",
     "empty_today_desc": "可以先用一句话录入，例如：明天下午三点和产品开会。",
     "empty_day_title": "这一天还没有安排",
     "empty_day_desc": "后续会支持从这里直接长按创建计划。",
+    "empty_board_title": "当前筛选下还没有任务卡片",
+    "empty_board_desc": "换一个筛选看看，或者先回到聊天页说一句新的安排。",
+    "timeline_empty_title": "这一天还没有排进时间表",
+    "timeline_empty_desc": "可以先切换到别的日期，或者从聊天里补一句新的计划。",
+    "queue_title": "Queue",
+    "queue_desc": "把当前筛选下的计划按状态压成一个任务流，先抓最需要处理的。",
+    "all_day_label": "全天",
     "sections": {
       "today": "今天",
       "upcoming": "即将到来",
-      "overdue": "已逾期",
-      "completed": "已完成"
+      "overdue": "逾期",
+      "completed": "完成"
     },
     "type": {
       "reminder": "提醒",
@@ -435,6 +455,9 @@
     "preview_expired": "已超过 5 分钟，不能再处理",
     "retry_confirm": "重新确认",
     "cancel_draft": "撤销",
+    "plan_time_warning_label": "时间需要调整",
+    "plan_time_adjust_cta": "改到明天同一时间",
+    "plan_time_adjusted": "已调整到明天同一时间",
     "undo_latest_message": "撤销这句话",
     "undo_latest_record": "撤销这条记录",
     "undo_available_window": "5 分钟内可撤销",

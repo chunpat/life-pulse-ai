@@ -341,6 +341,93 @@ function buildFallbackPlan(text, timeZone) {
   };
 }
 
+function getDateKeyInTimeZone(timeZone, timestamp) {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(new Date(timestamp));
+  } catch (error) {
+    return new Date(timestamp).toISOString().slice(0, 10);
+  }
+}
+
+function getPlanEffectiveTimestamp(plan) {
+  if (!plan) return null;
+
+  if (plan.planType === 'event') {
+    return plan.endAt || plan.startAt || plan.reminderAt || null;
+  }
+
+  return plan.dueAt || plan.startAt || plan.reminderAt || null;
+}
+
+function shiftTimestampToNextDay(timeZone, timestamp) {
+  if (!timestamp) return null;
+
+  const parts = getDateTimePartsInTimeZone(timeZone, new Date(timestamp));
+  return zonedDateTimeToUtcMs(timeZone, parts.year, parts.month, parts.day + 1, parts.hour, parts.minute);
+}
+
+function buildTomorrowSuggestedPlan(plan, timeZone) {
+  if (!plan) return undefined;
+
+  if (plan.planType === 'event') {
+    return {
+      startAt: shiftTimestampToNextDay(timeZone, plan.startAt),
+      endAt: shiftTimestampToNextDay(timeZone, plan.endAt),
+      dueAt: null,
+      reminderAt: shiftTimestampToNextDay(timeZone, plan.reminderAt)
+    };
+  }
+
+  const baseDueAt = plan.dueAt || plan.startAt || plan.reminderAt;
+  if (!baseDueAt) {
+    return undefined;
+  }
+
+  return {
+    startAt: null,
+    endAt: null,
+    dueAt: shiftTimestampToNextDay(timeZone, baseDueAt),
+    reminderAt: plan.reminderAt
+      ? shiftTimestampToNextDay(timeZone, plan.reminderAt)
+      : shiftTimestampToNextDay(timeZone, baseDueAt)
+  };
+}
+
+function attachPlanTimeValidation(plan, timeZone, isEn) {
+  if (!plan) {
+    return plan;
+  }
+
+  const effectiveTimestamp = getPlanEffectiveTimestamp(plan);
+  if (!effectiveTimestamp || plan.isAllDay) {
+    return plan;
+  }
+
+  const now = Date.now();
+  const todayKey = getDateKeyInTimeZone(timeZone, now);
+  const targetDayKey = getDateKeyInTimeZone(timeZone, effectiveTimestamp);
+
+  if (targetDayKey !== todayKey || effectiveTimestamp >= now) {
+    return plan;
+  }
+
+  return {
+    ...plan,
+    timeValidation: {
+      status: 'past',
+      message: isEn
+        ? 'This time has already passed today. You can move it to tomorrow at the same time.'
+        : '这个时间今天已经过去了，可以改到明天同一时间。',
+      suggestedPlan: buildTomorrowSuggestedPlan(plan, timeZone)
+    }
+  };
+}
+
 // 解析生活日志 - 允许游客访问，前端负责次数限制
 router.post('/parse', async (req, res) => {
   try {
@@ -508,6 +595,10 @@ Rules:
       parsedData.intent = 'plan';
       parsedData.plan = buildFallbackPlan(text, resolvedTimezone);
       parsedData.assistantReply = undefined;
+    }
+
+    if (parsedData.plan) {
+      parsedData.plan = attachPlanTimeValidation(parsedData.plan, resolvedTimezone, isEn);
     }
 
     res.json(parsedData);

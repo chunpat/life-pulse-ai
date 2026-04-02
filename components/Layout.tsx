@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ViewMode } from '../types';
 import OnboardingGuide from './OnboardingGuide';
@@ -8,7 +8,6 @@ interface LayoutProps {
   children: React.ReactNode;
   currentView: ViewMode;
   onViewChange: (view: ViewMode) => void;
-  onOpenLoggerComposer: () => void;
   onOpenLoggerSidebar?: (tab?: 'goals' | 'record-add') => void;
   newLogAdded?: boolean;
   userName?: string;
@@ -23,7 +22,6 @@ export const Layout: React.FC<LayoutProps> = ({
   children, 
   currentView, 
   onViewChange, 
-  onOpenLoggerComposer,
   onOpenLoggerSidebar,
   newLogAdded = false,
   userName = '游客',
@@ -36,11 +34,14 @@ export const Layout: React.FC<LayoutProps> = ({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isNavDrawerOpen, setIsNavDrawerOpen] = useState(false);
   const [expandedDrawerSection, setExpandedDrawerSection] = useState<'navigation' | 'tools'>('navigation');
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
   const { t, i18n } = useTranslation();
 
   const displayUserName = userName === '游客' ? t('common.guest_user') : userName;
   const isLoggerView = currentView === ViewMode.LOGGER;
-  const isSoftShellView = currentView === ViewMode.LOGGER || currentView === ViewMode.PLAN || currentView === ViewMode.FINANCE;
+  const isEdgeBackView = currentView === ViewMode.PLAN || currentView === ViewMode.FINANCE || currentView === ViewMode.TIMELINE;
+  const isSoftShellView = currentView === ViewMode.LOGGER || currentView === ViewMode.TIMELINE || currentView === ViewMode.PLAN || currentView === ViewMode.FINANCE;
   const currentViewLabel = currentView === ViewMode.LOGGER
     ? t('nav.chat_home')
     : currentView === ViewMode.PLAN
@@ -70,6 +71,43 @@ export const Layout: React.FC<LayoutProps> = ({
 
   const toggleDrawerSection = (section: 'navigation' | 'tools') => {
     setExpandedDrawerSection((current) => current === section ? current : section);
+  };
+
+  const handleEdgeBackToChat = () => {
+    onViewChange(ViewMode.LOGGER);
+  };
+
+  const handleContentTouchStart = (event: React.TouchEvent<HTMLElement>) => {
+    if (!isEdgeBackView) return;
+
+    const touch = event.touches[0];
+    if (touch.clientX > 36) {
+      touchStartXRef.current = null;
+      touchStartYRef.current = null;
+      return;
+    }
+
+    touchStartXRef.current = touch.clientX;
+    touchStartYRef.current = touch.clientY;
+  };
+
+  const handleContentTouchEnd = (event: React.TouchEvent<HTMLElement>) => {
+    if (!isEdgeBackView) return;
+
+    const startX = touchStartXRef.current;
+    const startY = touchStartYRef.current;
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+
+    if (startX === null || startY === null) return;
+
+    const touch = event.changedTouches[0];
+    const deltaX = touch.clientX - startX;
+    const deltaY = Math.abs(touch.clientY - startY);
+
+    if (deltaX > 72 && deltaY < 42) {
+      handleEdgeBackToChat();
+    }
   };
 
   return (
@@ -272,14 +310,14 @@ export const Layout: React.FC<LayoutProps> = ({
                       <button
                         type="button"
                         onClick={() => {
-                          onOpenLoggerComposer();
+                          onViewChange(ViewMode.LOGGER);
                           setIsNavDrawerOpen(false);
                         }}
                         className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-[#fffaf0] px-4 py-3 text-left text-slate-800 transition-colors hover:bg-amber-50"
                       >
                         <span>
-                          <span className="block text-sm font-bold">{t('nav.drawer_open_composer')}</span>
-                          <span className="mt-1 block text-xs text-slate-500">{t('logger.keyboard_mode_hint')}</span>
+                          <span className="block text-sm font-bold">{t('common.back_to_chat')}</span>
+                          <span className="mt-1 block text-xs text-slate-500">{t('nav.chat_home')}</span>
                         </span>
                         <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
                       </button>
@@ -315,15 +353,34 @@ export const Layout: React.FC<LayoutProps> = ({
           </div>
         )}
 
+        {isEdgeBackView && (
+          <div className="pointer-events-none absolute inset-y-0 left-0 z-30 flex items-center">
+            <button
+              type="button"
+              onClick={handleEdgeBackToChat}
+              title={t('common.back_to_chat')}
+              className="pointer-events-auto -ml-1 inline-flex h-20 w-10 flex-col items-center justify-center gap-1 rounded-r-[1rem] border border-l-0 border-[#e8d6b0] bg-white/88 text-slate-700 shadow-lg shadow-amber-100/40 backdrop-blur-md transition-all hover:w-12 hover:bg-white"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 10h8M8 14h5m7 5l-3.8-2.1a2 2 0 00-.96-.24H6a3 3 0 01-3-3V7a3 3 0 013-3h12a3 3 0 013 3v6a3 3 0 01-3 3h-.24a2 2 0 00-.96.24L13 19z" /></svg>
+              <span className="text-[9px] font-black tracking-[0.14em] text-amber-600 [writing-mode:vertical-rl]">CHAT</span>
+            </button>
+          </div>
+        )}
+
         {/* Scrollable Content Area */}
           <main className={`flex-1 overflow-y-auto scrollbar-hide ${isSoftShellView ? 'bg-transparent pb-24' : 'bg-slate-50 pb-24'}`}>
-            <div className={`${isLoggerView ? 'h-full min-h-full px-0 pt-0 pb-0' : 'px-4 py-2 min-h-full'}`}>
+            <div
+              className={`${isLoggerView ? 'h-full min-h-full px-0 pt-0 pb-0' : 'px-4 py-2 min-h-full'}`}
+              onTouchStart={handleContentTouchStart}
+              onTouchEnd={handleContentTouchEnd}
+            >
             {children}
            </div>
         </main>
 
         {/* Floating Composer Button */}
-          {!isLoggerView && (
+          {!isLoggerView && !isEdgeBackView && (
           <div className="pointer-events-none absolute inset-x-0 bottom-6 z-30 flex justify-center px-4">
           <div className="pointer-events-auto relative flex items-center gap-2 rounded-full border border-slate-200 bg-white/92 px-2 py-2 shadow-2xl shadow-slate-200/70 backdrop-blur-xl">
             <button

@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { parseLifeLog, getSmartSuggestions } from '../services/qwenService';
 import { createFinanceRecord, deleteFinanceRecordsByLogId } from '../services/financeService';
 import { storageService } from '../services/storageService';
-import { ChatMessage, Goal, GoalCreateInput, LogEntry, Plan, PlanCreateInput, RewardProfile } from '../types';
+import { ChatMessage, Goal, GoalCreateInput, LogEntry, ParseResult, Plan, PlanCreateInput, PlanParseResult, RewardProfile } from '../types';
 import { formatMessageTime, shouldShowTimeLabel } from '../utils/formatMessageTime';
 import GoalPlanner from './GoalPlanner';
 import NoticeToast from './NoticeToast';
@@ -244,6 +244,7 @@ const Logger: React.FC<LoggerProps> = ({
       return message.timestamp + UNDO_WINDOW_MS > currentTime;
     })?.id || null;
   const isCurrentDraftExpired = draftParse ? isDraftExpired(draftParse, currentTime) : false;
+  const currentDraftTimeValidation = draftParse?.parsed.intent === 'plan' ? draftParse.parsed.plan?.timeValidation : undefined;
   const activeSuggestionKey = getSuggestionKey(suggestion);
   const shouldShowFloatingSuggestion = Boolean(suggestion) && activeSuggestionKey !== dismissedSuggestionKey && !isComposerOpen;
 
@@ -839,6 +840,17 @@ const Logger: React.FC<LoggerProps> = ({
     }, 0);
   };
 
+  const handleApplyDraftTimeSuggestion = (draftData: NonNullable<ReturnType<typeof buildDraftPreview>>) => {
+    const adjustedDraft = buildAdjustedDraftPreview(draftData);
+    if (!adjustedDraft) {
+      return;
+    }
+
+    persistUnconfirmedDraft(adjustedDraft);
+    setDraftParse(adjustedDraft);
+    showNotice(t('logger.plan_time_adjusted'), 'success');
+  };
+
   const handleConfirmDraft = async () => {
     if (!draftParse || isProcessing) return;
 
@@ -848,6 +860,11 @@ const Logger: React.FC<LoggerProps> = ({
       setDraftPendingMessageId(null);
       clearPersistedDraft();
       showNotice(t('logger.preview_expired'), 'error');
+      return;
+    }
+
+    if (draftParse.parsed.intent === 'plan' && draftParse.parsed.plan?.timeValidation) {
+      showNotice(draftParse.parsed.plan.timeValidation.message, 'error');
       return;
     }
 
@@ -961,7 +978,7 @@ const Logger: React.FC<LoggerProps> = ({
       setDraftTriggerMessageId(null);
     } catch (e) {
       console.error(e);
-      showNotice(t('logger.parse_failed', '解析失败，已按普通记录保存'), 'error');
+      showNotice(e instanceof Error ? e.message : t('logger.parse_failed', '解析失败，已按普通记录保存'), 'error');
     } finally {
       setIsProcessing(false);
     }
@@ -1353,6 +1370,14 @@ const Logger: React.FC<LoggerProps> = ({
                                       ))}
                                     </div>
                                   )}
+                                  {draftData.kind === 'plan' && draftData.parsed.plan?.timeValidation && (
+                                    <div className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                                      <p className="font-bold uppercase tracking-[0.18em]">
+                                        {t('logger.plan_time_warning_label')}
+                                      </p>
+                                      <p className="mt-1 leading-relaxed">{draftData.parsed.plan.timeValidation.message}</p>
+                                    </div>
+                                  )}
                                   <div className="mt-3 flex items-center justify-between gap-2">
                                     <span className="text-[11px] text-slate-500">
                                       {isExpired ? t('logger.preview_expired') : t('logger.preview_available_window')}
@@ -1409,6 +1434,25 @@ const Logger: React.FC<LoggerProps> = ({
                     </div>
                   )}
 
+                  {currentDraftTimeValidation && (
+                    <div className="mt-3 rounded-[1.4rem] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-rose-700">
+                        {t('logger.plan_time_warning_label')}
+                      </p>
+                      <p className="mt-1 leading-relaxed">{currentDraftTimeValidation.message}</p>
+                      {currentDraftTimeValidation.suggestedPlan && (
+                        <button
+                          type="button"
+                          onClick={() => handleApplyDraftTimeSuggestion(draftParse)}
+                          disabled={isProcessing || isCurrentDraftExpired}
+                          className="mt-3 rounded-full bg-rose-600 px-4 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {t('logger.plan_time_adjust_cta')}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   <div className="mt-4 flex gap-2">
                     <span className="flex items-center text-[11px] text-slate-500">
                       {isCurrentDraftExpired ? t('logger.preview_expired') : t('logger.preview_available_window')}
@@ -1416,7 +1460,7 @@ const Logger: React.FC<LoggerProps> = ({
                     <button
                       type="button"
                       onClick={handleConfirmDraft}
-                      disabled={isProcessing || isCurrentDraftExpired}
+                      disabled={isProcessing || isCurrentDraftExpired || Boolean(currentDraftTimeValidation)}
                       className="rounded-full bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {t('logger.confirm_save')}
@@ -1864,6 +1908,25 @@ const Logger: React.FC<LoggerProps> = ({
                       </div>
                     )}
 
+                    {currentDraftTimeValidation && (
+                      <div className="mt-3 rounded-[1.4rem] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-rose-700">
+                          {t('logger.plan_time_warning_label')}
+                        </p>
+                        <p className="mt-1 leading-relaxed">{currentDraftTimeValidation.message}</p>
+                        {currentDraftTimeValidation.suggestedPlan && (
+                          <button
+                            type="button"
+                            onClick={() => handleApplyDraftTimeSuggestion(draftParse)}
+                            disabled={isProcessing || isCurrentDraftExpired}
+                            className="mt-3 rounded-full bg-rose-600 px-4 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {t('logger.plan_time_adjust_cta')}
+                          </button>
+                        )}
+                      </div>
+                    )}
+
                     <div className="mt-4 flex gap-2">
                       <span className="flex items-center text-[11px] text-slate-500">
                         {isCurrentDraftExpired ? t('logger.preview_expired') : t('logger.preview_available_window')}
@@ -1871,7 +1934,7 @@ const Logger: React.FC<LoggerProps> = ({
                       <button
                         type="button"
                         onClick={handleConfirmDraft}
-                        disabled={isProcessing || isCurrentDraftExpired}
+                        disabled={isProcessing || isCurrentDraftExpired || Boolean(currentDraftTimeValidation)}
                         className="rounded-full bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {t('logger.confirm_save')}
@@ -2198,6 +2261,27 @@ const buildDraftPreview = (parsed: Awaited<ReturnType<typeof parseLifeLog>>, ori
       parsed.durationMinutes ? `${parsed.durationMinutes} 分钟` : null,
       parsed.mood || null
     ].filter(Boolean) as string[]
+  };
+};
+
+const buildAdjustedDraftPreview = (draft: NonNullable<ReturnType<typeof buildDraftPreview>>) => {
+  const suggestedPlan = draft.parsed.plan?.timeValidation?.suggestedPlan;
+  if (!suggestedPlan || !draft.parsed.plan) {
+    return null;
+  }
+
+  const nextParsed: ParseResult = {
+    ...draft.parsed,
+    plan: {
+      ...draft.parsed.plan,
+      ...suggestedPlan,
+      timeValidation: undefined
+    } as PlanParseResult
+  };
+
+  return {
+    ...buildDraftPreview(nextParsed, draft.originalText),
+    createdAt: draft.createdAt
   };
 };
 

@@ -493,7 +493,6 @@ const App: React.FC = () => {
     <Layout 
       currentView={view} 
       onViewChange={handleViewChange} 
-      onOpenLoggerComposer={handleOpenLoggerComposer}
       onOpenLoggerSidebar={handleOpenLoggerSidebar}
       newLogAdded={newLogAdded}
       userName={user.name}
@@ -541,13 +540,12 @@ const App: React.FC = () => {
         <PlanCenter
           plans={plans}
           isGuest={user.status === 'guest'}
-          onOpenLoggerComposer={handleOpenLoggerComposer}
           onCompletePlan={handleCompletePlan}
           onCancelPlan={handleCancelPlan}
         />
       )}
       {view === ViewMode.FINANCE && (
-        <Finance userId={user.id} onOpenLoggerComposer={handleOpenLoggerComposer} />
+        <Finance userId={user.id} />
       )}
       {view === ViewMode.ANALYTICS && (
         <Analytics 

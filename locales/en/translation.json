@@ -78,6 +78,17 @@
     "bridge_action": "Back to chat",
     "quick_add": "Quick Add",
     "guest_hint": "The plan module is designed for signed-in users. Guests can still try the natural-language composer from the log entry flow.",
+    "views": {
+      "board": "Task flow",
+      "schedule": "Schedule"
+    },
+    "filters": {
+      "all": "All",
+      "pending": "Pending",
+      "overdue": "Overdue",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
+    },
     "tabs": {
       "today": "Today",
       "calendar": "Calendar",
@@ -86,11 +97,20 @@
     "today_title": "Today's plans",
     "today_desc": "Put tasks and upcoming events into one place for today.",
     "calendar_desc": "The first version ships with month view and a day drawer.",
+    "schedule_title": "Weekly task schedule",
+    "schedule_desc": "Switch to the timeline to read this week's density and time blocks day by day.",
     "day_drawer_title": "Plans on this day",
     "empty_today_title": "No plans for today",
     "empty_today_desc": "You can start with a sentence like: Meet product team tomorrow at 3 PM.",
     "empty_day_title": "No plans on this day",
     "empty_day_desc": "A future iteration will support long-press quick create from here.",
+    "empty_board_title": "No task cards in this filter",
+    "empty_board_desc": "Try another filter, or jump back to chat and add a new plan in one sentence.",
+    "timeline_empty_title": "Nothing is placed on this schedule yet",
+    "timeline_empty_desc": "Pick another date or add a new plan from chat first.",
+    "queue_title": "Queue",
+    "queue_desc": "Compress the current filter into one task flow so the next thing to handle is obvious.",
+    "all_day_label": "All day",
     "sections": {
       "today": "Today",
       "upcoming": "Upcoming",
@@ -435,6 +455,9 @@
     "preview_expired": "More than 5 minutes old and can no longer be processed",
     "retry_confirm": "Retry Confirmation",
     "cancel_draft": "Cancel",
+    "plan_time_warning_label": "Time needs adjustment",
+    "plan_time_adjust_cta": "Move it to tomorrow at the same time",
+    "plan_time_adjusted": "Moved to tomorrow at the same time",
     "undo_latest_message": "Undo this message",
     "undo_latest_record": "Undo this entry",
     "undo_available_window": "Available for 5 minutes",

@@ -14,6 +14,23 @@ const sanitizeText = (value, maxLength = 255) => {
   return sanitized.slice(0, maxLength);
 };
 
+const getDateKeyInTimeZone = (timeZone, timestamp) => {
+  const targetTimeZone = sanitizeText(timeZone, 100) || 'UTC';
+
+  try {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: targetTimeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+
+    return formatter.format(new Date(timestamp));
+  } catch (error) {
+    return new Date(timestamp).toISOString().slice(0, 10);
+  }
+};
+
 const normalizeTimestamp = (value) => {
   if (value === null || value === undefined || value === '') {
     return null;
@@ -28,6 +45,40 @@ const normalizeBoolean = (value, fallback = false) => {
   if (typeof value === 'string') return value === 'true';
   if (typeof value === 'number') return value === 1;
   return fallback;
+};
+
+const getPlanEffectiveTimestamp = ({ planType, startAt, endAt, dueAt, reminderAt }) => {
+  if (planType === 'event') {
+    return endAt || startAt || reminderAt || null;
+  }
+
+  return dueAt || startAt || reminderAt || null;
+};
+
+const validatePlanTime = ({ planType, status, source, startAt, endAt, dueAt, reminderAt, isAllDay, timezone }) => {
+  if (status !== 'pending' || source === 'imported') {
+    return;
+  }
+
+  const effectiveTimestamp = getPlanEffectiveTimestamp({ planType, startAt, endAt, dueAt, reminderAt });
+  if (!effectiveTimestamp) {
+    return;
+  }
+
+  if (isAllDay) {
+    const targetDay = getDateKeyInTimeZone(timezone, effectiveTimestamp);
+    const today = getDateKeyInTimeZone(timezone, Date.now());
+
+    if (targetDay < today) {
+      throw new Error('计划时间已过，请调整到未来时间');
+    }
+
+    return;
+  }
+
+  if (effectiveTimestamp < Date.now()) {
+    throw new Error('计划时间已过，请调整到未来时间');
+  }
 };
 
 const buildPlanPayload = (input, existingPlan = null) => {
@@ -78,6 +129,25 @@ const buildPlanPayload = (input, existingPlan = null) => {
     throw new Error('结束时间不能早于开始时间');
   }
 
+  const isAllDay = Object.prototype.hasOwnProperty.call(input, 'isAllDay')
+    ? normalizeBoolean(input.isAllDay, false)
+    : existingPlan?.isAllDay ?? false;
+  const timezone = Object.prototype.hasOwnProperty.call(input, 'timezone')
+    ? sanitizeText(input.timezone, 100)
+    : existingPlan?.timezone ?? null;
+
+  validatePlanTime({
+    planType,
+    status,
+    source,
+    startAt,
+    endAt,
+    dueAt,
+    reminderAt,
+    isAllDay,
+    timezone
+  });
+
   return {
     title: title || existingPlan.title,
     notes: Object.prototype.hasOwnProperty.call(input, 'notes')
@@ -89,12 +159,8 @@ const buildPlanPayload = (input, existingPlan = null) => {
     startAt,
     endAt,
     dueAt,
-    isAllDay: Object.prototype.hasOwnProperty.call(input, 'isAllDay')
-      ? normalizeBoolean(input.isAllDay, false)
-      : existingPlan?.isAllDay ?? false,
-    timezone: Object.prototype.hasOwnProperty.call(input, 'timezone')
-      ? sanitizeText(input.timezone, 100)
-      : existingPlan?.timezone ?? null,
+    isAllDay,
+    timezone,
     reminderAt,
     syncTarget,
     syncState,

@@ -8,7 +8,6 @@ import ConfirmDialog from './ConfirmDialog';
 
 interface FinanceProps {
   userId: string;
-    onOpenLoggerComposer: () => void;
 }
 
 type FilterType = 'WEEK' | 'MONTH' | 'ALL';
@@ -44,7 +43,7 @@ const getRecordTone = (record: FinanceRecord) => {
     };
 };
 
-const Finance: React.FC<FinanceProps> = ({ userId, onOpenLoggerComposer }) => {
+const Finance: React.FC<FinanceProps> = ({ userId }) => {
   const { t, i18n } = useTranslation();
   const [records, setRecords] = useState<FinanceRecord[]>([]);
   const [stats, setStats] = useState<any>(null);
@@ -229,23 +228,6 @@ const Finance: React.FC<FinanceProps> = ({ userId, onOpenLoggerComposer }) => {
                         </div>
                     )}
                 </header>
-
-                <section className="rounded-[2rem] border border-slate-200 bg-white/90 p-5 shadow-sm ring-1 ring-white/80 backdrop-blur">
-                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                        <div className="max-w-2xl">
-                            <p className="text-[11px] font-black uppercase tracking-[0.2em] text-amber-600">{t('nav.chat_home')}</p>
-                            <h3 className="mt-2 text-xl font-black tracking-tight text-slate-900">{t('finance.bridge_title')}</h3>
-                            <p className="mt-2 text-sm leading-relaxed text-slate-500">{t('finance.bridge_desc')}</p>
-                        </div>
-                        <button
-                            type="button"
-                            onClick={onOpenLoggerComposer}
-                            className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white transition-colors hover:bg-slate-800"
-                        >
-                            {t('finance.bridge_action')}
-                        </button>
-                    </div>
-                </section>
 
                 {chartData.length > 0 && (
                     <section className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">

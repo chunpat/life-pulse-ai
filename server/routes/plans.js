@@ -20,6 +20,7 @@ const getPlanErrorStatus = (message) => {
   if (message === '不支持的同步目标') return 400;
   if (message === '不支持的同步状态') return 400;
   if (message === '结束时间不能早于开始时间') return 400;
+  if (message === '计划时间已过，请调整到未来时间') return 400;
   return 500;
 };
 

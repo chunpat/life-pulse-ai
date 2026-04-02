@@ -104,6 +104,16 @@ export interface PlanParseResult {
   syncTargetSuggestion?: PlanSyncTarget;
   confidence?: number;
   originalText?: string;
+  timeValidation?: {
+    status: 'past';
+    message: string;
+    suggestedPlan?: {
+      startAt?: number | null;
+      endAt?: number | null;
+      dueAt?: number | null;
+      reminderAt?: number | null;
+    };
+  };
 }
 
 export interface User {
