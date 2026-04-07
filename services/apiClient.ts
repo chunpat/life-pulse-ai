@@ -1,4 +1,6 @@
 
+import { buildApiUrl } from './runtimeConfig';
+
 const TOKEN_KEY = 'lifepulse_token';
 
 interface RequestOptions extends RequestInit {
@@ -29,7 +31,7 @@ export const apiClient = async (endpoint: string, options: RequestOptions = {}) 
     config.body = options.body;
   }
 
-  let url = endpoint;
+  let url = buildApiUrl(endpoint);
   if (params) {
     const searchParams = new URLSearchParams(params);
     url += `?${searchParams.toString()}`;

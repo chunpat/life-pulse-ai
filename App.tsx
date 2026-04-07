@@ -12,7 +12,8 @@ import InviteTools from './components/InviteTools';
 import { storageService } from './services/storageService';
 import { createChatMessage, deleteChatMessages, fetchChatMessages, syncLocalChatToCloud } from './services/chatService';
 import { createGoal, deleteGoal, fetchGoals, pauseGoal, resumeGoal, setPrimaryGoal } from './services/goalService';
-import { cancelPlan, completePlan, createPlan as createPlanItem, deletePlan as deletePlanItem, fetchPlans } from './services/planService';
+import { cancelPlan, completePlan, createPlan as createPlanItem, deletePlan as deletePlanItem, fetchPlans, updatePlan as updatePlanItem } from './services/planService';
+import { planSyncService } from './services/planSyncService';
 import { fetchRewardBadges, fetchRewardLedger, fetchRewardProfile } from './services/rewardService';
 
 const GUEST_STORAGE_USER = 'guest_user_v1';
@@ -42,6 +43,7 @@ const App: React.FC = () => {
   const [loggerSidebarOpenTick, setLoggerSidebarOpenTick] = useState(0);
   const [loggerSidebarTab, setLoggerSidebarTab] = useState<'goals' | 'record-add'>('goals');
   const lastAnalyzedFingerprint = React.useRef<string>('');
+  const hasFlushedPlanDeleteQueue = React.useRef(false);
 
   // 初始化用户状态
   useEffect(() => {
@@ -206,6 +208,42 @@ const App: React.FC = () => {
     } catch (error) {
       console.error('Plan refresh error:', error);
     }
+  }, [user]);
+
+  const syncPlanStateToIos = useCallback(async (plan: Plan) => {
+    if (!planSyncService.shouldSyncPlan(plan)) {
+      return plan;
+    }
+
+    const syncOutcome = await planSyncService.syncPlan(plan);
+    if (syncOutcome.syncState === plan.syncState) {
+      return plan;
+    }
+
+    try {
+      return await updatePlanItem(plan.id, {
+        syncState: syncOutcome.syncState
+      });
+    } catch (error) {
+      console.error('Persist plan sync state error:', error);
+      return plan;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!user || user.status !== 'authenticated') {
+      hasFlushedPlanDeleteQueue.current = false;
+      return;
+    }
+
+    if (hasFlushedPlanDeleteQueue.current) {
+      return;
+    }
+
+    hasFlushedPlanDeleteQueue.current = true;
+    planSyncService.flushPendingDeletions().catch((error) => {
+      console.error('Flush plan delete queue error:', error);
+    });
   }, [user]);
 
   const handleCreateChatMessage = useCallback(async (messageInput: ChatMessageCreateInput) => {
@@ -406,51 +444,62 @@ const App: React.FC = () => {
 
     try {
       const createdPlan = await createPlanItem(planInput);
+      await syncPlanStateToIos(createdPlan);
       await refreshPlans();
       return createdPlan;
     } catch (error) {
       console.error('Create plan error:', error);
       throw error;
     }
-  }, [refreshPlans, user]);
+  }, [refreshPlans, syncPlanStateToIos, user]);
 
   const handleDeletePlan = useCallback(async (planId: string) => {
     if (!user || user.status !== 'authenticated') return;
+
+    const planToDelete = plans.find((plan) => plan.id === planId) || null;
 
     setPlans((prev) => prev.filter((plan) => plan.id !== planId));
 
     try {
       await deletePlanItem(planId);
+      if (planToDelete) {
+        const deleteOutcome = await planSyncService.deletePlan(planToDelete);
+        if (deleteOutcome.syncState !== 'synced') {
+          console.warn('Delete iOS plan sync pending retry:', deleteOutcome.reason || deleteOutcome.syncState);
+        }
+      }
       await refreshPlans();
     } catch (error) {
       console.error('Delete plan error:', error);
       throw error;
     }
-  }, [refreshPlans, user]);
+  }, [plans, refreshPlans, user]);
 
   const handleCompletePlan = useCallback(async (planId: string) => {
     if (!user || user.status !== 'authenticated') return;
 
     try {
-      await completePlan(planId);
+      const completedPlan = await completePlan(planId);
+      await syncPlanStateToIos(completedPlan);
       await refreshPlans();
     } catch (error) {
       console.error('Complete plan error:', error);
       throw error;
     }
-  }, [refreshPlans, user]);
+  }, [refreshPlans, syncPlanStateToIos, user]);
 
   const handleCancelPlan = useCallback(async (planId: string) => {
     if (!user || user.status !== 'authenticated') return;
 
     try {
-      await cancelPlan(planId);
+      const cancelledPlan = await cancelPlan(planId);
+      await syncPlanStateToIos(cancelledPlan);
       await refreshPlans();
     } catch (error) {
       console.error('Cancel plan error:', error);
       throw error;
     }
-  }, [refreshPlans, user]);
+  }, [refreshPlans, syncPlanStateToIos, user]);
 
   // 统一生成 AI 洞察的逻辑，防止重复请求
   const generateInsight = useCallback(async (currentLogs: LogEntry[]) => {

@@ -10,6 +10,7 @@
     "seed:official-demo": "npm --prefix server run seed:official-demo"
   },
   "dependencies": {
+    "@capacitor/core": "^7.4.3",
     "i18next": "^25.7.4",
     "i18next-browser-languagedetector": "^8.2.0",
     "openai": "^6.15.0",
@@ -20,6 +21,8 @@
     "recharts": "^2.15.4"
   },
   "devDependencies": {
+    "@capacitor/cli": "^7.4.3",
+    "@capacitor/ios": "^7.4.3",
     "@types/node": "^16.18.126",
     "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "^10.4.23",
@@ -28,5 +31,16 @@
     "typescript": "~5.8.2",
     "vite": "^4.5.14",
     "vite-plugin-pwa": "^1.2.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "seed:official-demo": "npm --prefix server run seed:official-demo",
+    "cap:sync": "npx cap sync",
+    "cap:sync:ios": "npx cap sync ios",
+    "cap:add:ios": "npx cap add ios",
+    "cap:open:ios": "npx cap open ios",
+    "ios:build": "npm run build && npm run cap:sync:ios"
   }
 }
