@@ -84,6 +84,35 @@ npm run dev
 
 浏览器访问 `http://localhost:3000` 即可使用。
 
+### 4. iOS 原生壳开发（已开始）
+
+当前仓库已经接入 Capacitor 基础配置、iOS 工程壳和自定义计划同步插件骨架。
+
+首次准备 iOS 环境时，除了 Node.js 外，还需要：
+
+- Xcode（不是仅 Command Line Tools）
+- CocoaPods
+- 根目录 `.env` 或 `.env.local` 中配置 `VITE_NATIVE_API_BASE_URL`，指向你的后端地址，例如 `http://192.168.1.10:5002`
+
+常用命令：
+
+```bash
+# 构建前端并同步到 iOS 工程
+npm run ios:build
+
+# 仅同步 Capacitor 资源并补注册配置
+npm run cap:sync:ios
+
+# 在 Xcode 中打开 iOS 工程
+npm run cap:open:ios 
+```
+
+如果你当前机器只有 Command Line Tools，`pod install` 会失败，需要先安装完整 Xcode 并执行：
+
+```bash
+sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+```
+
 ## 🗺️ 全平台路线图 (Roadmap)
 
 ### 1. 核心体验与安全性 (已完成)
@@ -117,7 +146,7 @@ npm run dev
 - [ ] **高级报表**: 提供年度深度复盘 pdf 导出功能。
 
 ### 5. IOS APP, 单向同步，App 为主
-- [ ] Capacitor + 自定义 iOS 插件；本地存 externalId；删除/编辑同步落系统侧
+- [ ] Capacitor 工程、运行时 API 基址、自定义 iOS EventKit 插件骨架已接入；待完成 Xcode / pod install / 真机联调
 
 ## 🛡️ 注意事项
 

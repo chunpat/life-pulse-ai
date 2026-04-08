@@ -7,7 +7,13 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "seed:official-demo": "npm --prefix server run seed:official-demo"
+    "seed:official-demo": "npm --prefix server run seed:official-demo",
+    "cap:patch:ios": "node scripts/patch_capacitor_ios_config.mjs",
+    "cap:sync": "npx cap sync && npm run cap:patch:ios",
+    "cap:sync:ios": "npx cap sync ios && npm run cap:patch:ios",
+    "cap:add:ios": "npx cap add ios && npm run cap:patch:ios",
+    "cap:open:ios": "npx cap open ios",
+    "ios:build": "npm run build && npm run cap:sync:ios"
   },
   "dependencies": {
     "@capacitor/core": "^7.4.3",
@@ -31,16 +37,5 @@
     "typescript": "~5.8.2",
     "vite": "^4.5.14",
     "vite-plugin-pwa": "^1.2.0"
-  },
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
-    "seed:official-demo": "npm --prefix server run seed:official-demo",
-    "cap:sync": "npx cap sync",
-    "cap:sync:ios": "npx cap sync ios",
-    "cap:add:ios": "npx cap add ios",
-    "cap:open:ios": "npx cap open ios",
-    "ios:build": "npm run build && npm run cap:sync:ios"
   }
 }
