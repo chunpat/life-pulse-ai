@@ -61,7 +61,11 @@ export const apiClient = async (endpoint: string, options: RequestOptions = {}) 
 
     return await response.json();
   } catch (error) {
-    console.error('API Request Error:', error);
+    console.error('API Request Error:', {
+      url,
+      method: config.method || 'GET',
+      error
+    });
     throw error;
   }
 };

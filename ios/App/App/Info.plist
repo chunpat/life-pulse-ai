@@ -24,6 +24,13 @@
 	<true/>
 	<key>NSCalendarsUsageDescription</key>
 	<string>LifePulse AI 需要访问你的日历，以便将应用内计划同步到 iOS 日历。</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
+		<true/>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>NSRemindersUsageDescription</key>
 	<string>LifePulse AI 需要访问你的提醒事项，以便将应用内提醒同步到系统提醒事项。</string>
 	<key>UILaunchStoryboardName</key>

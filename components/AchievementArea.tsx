@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { RewardBadge, RewardLedgerEntry, RewardProfile } from '../types';
+import { buildSafeAreaPaddingStyle } from '../utils/safeArea';
 
 interface AchievementAreaProps {
   rewardProfile: RewardProfile;
@@ -389,7 +390,7 @@ const AchievementArea: React.FC<AchievementAreaProps> = ({ rewardProfile, reward
       </div>
 
       {selectedBadge && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center px-4">
+        <div className="fixed inset-0 z-[120] flex items-center justify-center" style={buildSafeAreaPaddingStyle({ top: '1rem', right: '1rem', bottom: '1rem', left: '1rem' })}>
           <button
             type="button"
             aria-label={t('rewards.close_detail')}

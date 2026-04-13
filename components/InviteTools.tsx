@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useTranslation } from 'react-i18next';
 import { User } from '../types';
+import { buildSafeAreaPaddingStyle } from '../utils/safeArea';
 
 interface InviteToolsProps {
   user: User;
@@ -13,6 +14,7 @@ const InviteTools: React.FC<InviteToolsProps> = ({ user, onClose }) => {
   const { t } = useTranslation();
   const [platform, setPlatform] = useState('WeChat Official Account');
   const [copied, setCopied] = useState(false);
+  const modalSafeStyle = buildSafeAreaPaddingStyle({ top: '1rem', right: '1rem', bottom: '1rem', left: '1rem' });
 
   const platforms = [
     { id: 'WeChat Official Account', label: t('invite.platforms.wechat_oa', 'WeChat Official Account') },
@@ -32,7 +34,7 @@ const InviteTools: React.FC<InviteToolsProps> = ({ user, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/30 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 backdrop-blur-sm animate-in fade-in duration-200" style={modalSafeStyle}>
       <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl border border-slate-100 p-6 relative animate-in zoom-in-95 duration-200">
         <button 
           onClick={onClose}

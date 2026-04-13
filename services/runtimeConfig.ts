@@ -3,16 +3,16 @@ import { Capacitor } from '@capacitor/core';
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, '');
 
 const getConfiguredApiBaseUrl = () => {
-  const sharedBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
-  if (sharedBaseUrl) {
-    return trimTrailingSlash(sharedBaseUrl);
-  }
-
   if (Capacitor.isNativePlatform()) {
     const nativeBaseUrl = import.meta.env.VITE_NATIVE_API_BASE_URL?.trim();
     if (nativeBaseUrl) {
       return trimTrailingSlash(nativeBaseUrl);
     }
+  }
+
+  const sharedBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+  if (sharedBaseUrl) {
+    return trimTrailingSlash(sharedBaseUrl);
   }
 
   return '';

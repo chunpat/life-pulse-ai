@@ -25,6 +25,16 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING,
     allowNull: false
   },
+  authProvider: {
+    type: DataTypes.STRING,
+    allowNull: false,
+    defaultValue: 'local'
+  },
+  appleSubject: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    unique: true
+  },
   referrerId: {
     type: DataTypes.UUID,
     allowNull: true
@@ -52,5 +62,40 @@ const User = sequelize.define('User', {
 User.prototype.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
+
+const ensureAppleAuthSchema = async () => {
+  const queryInterface = sequelize.getQueryInterface();
+  const tableName = User.getTableName();
+  const columns = await queryInterface.describeTable(tableName);
+
+  if (!columns.authProvider) {
+    await queryInterface.addColumn(tableName, 'authProvider', {
+      type: DataTypes.STRING,
+      allowNull: false,
+      defaultValue: 'local'
+    });
+  }
+
+  if (!columns.appleSubject) {
+    await queryInterface.addColumn(tableName, 'appleSubject', {
+      type: DataTypes.STRING,
+      allowNull: true
+    });
+  }
+
+  const indexes = await queryInterface.showIndex(tableName);
+  const hasAppleSubjectIndex = indexes.some((index) =>
+    index.unique && Array.isArray(index.fields) && index.fields.some((field) => field.attribute === 'appleSubject')
+  );
+
+  if (!hasAppleSubjectIndex) {
+    await queryInterface.addIndex(tableName, ['appleSubject'], {
+      unique: true,
+      name: 'users_apple_subject_unique'
+    });
+  }
+};
+
+User.ensureAppleAuthSchema = ensureAppleAuthSchema;
 
 module.exports = User;

@@ -5,6 +5,7 @@ import { Goal, LogEntry } from '../types';
 import { createPortal } from 'react-dom';
 import { parseLifeLog } from '../services/qwenService';
 import { syncFinanceRecordsForLog } from '../services/financeService';
+import { buildSafeAreaInsetStyle, buildSafeAreaPaddingStyle } from '../utils/safeArea';
 
 interface HistoryProps {
   logs: LogEntry[];
@@ -16,6 +17,7 @@ interface HistoryProps {
 const History: React.FC<HistoryProps> = ({ logs, goals, onDelete, onUpdate }) => {
   const { t, i18n } = useTranslation();
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
+  const stickySectionSafeStyle = buildSafeAreaInsetStyle({ top: '5.5rem' });
 
   const CATEGORY_MAP: Record<string, string> = useMemo(() => ({
     'Work': t('common.category.Work'),
@@ -348,7 +350,7 @@ const History: React.FC<HistoryProps> = ({ logs, goals, onDelete, onUpdate }) =>
             return (
               <React.Fragment key={log.id}>
                 {showHeader && (
-                  <div className="sticky top-0 z-20 bg-slate-50/95 backdrop-blur-sm py-3 px-1 mt-4 mb-2 flex items-center gap-2">
+                  <div className="sticky z-20 mt-4 mb-2 flex items-center gap-2 bg-slate-50/95 px-1 py-3 backdrop-blur-sm" style={stickySectionSafeStyle}>
                     <div className="h-4 w-1 bg-amber-500 rounded-full"></div>
                     <span className="text-sm font-bold text-slate-700">{dateLabel}</span>
                     <div className="h-px flex-1 bg-slate-200 ml-2"></div>
@@ -707,7 +709,7 @@ const HistoryItem: React.FC<{
 
 const Modal: React.FC<{ onClose: () => void; children: React.ReactNode; title: string }> = ({ onClose, children, title }) => {
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center" style={buildSafeAreaPaddingStyle({ top: '1rem', right: '1rem', bottom: '1rem', left: '1rem' })}>
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity" onClick={onClose} />
       <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm p-6 relative z-10 animate-in fade-in zoom-in-95 duration-200">
         <div className="flex justify-between items-center mb-6">

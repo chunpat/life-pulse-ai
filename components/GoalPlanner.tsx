@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Goal, GoalCreateInput, GoalType, OfficialPlanTemplate } from '../types';
 import { fetchOfficialPlanTemplates } from '../services/officialPlanService';
+import { buildSafeAreaPaddingStyle } from '../utils/safeArea';
 import NoticeToast from './NoticeToast';
 import ConfirmDialog from './ConfirmDialog';
 
@@ -608,7 +609,7 @@ const GoalPlanner: React.FC<GoalPlannerProps> = ({
       )}
 
       {showComposer && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center px-4">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center" style={buildSafeAreaPaddingStyle({ top: '1rem', right: '1rem', bottom: '1rem', left: '1rem' })}>
           <div className="absolute inset-0 bg-black/45 backdrop-blur-sm" onClick={closeComposer} />
           <div className="relative z-10 w-full max-w-md overflow-hidden rounded-[2rem] bg-white shadow-2xl border border-slate-100">
             <div className="border-b border-slate-100 bg-[linear-gradient(135deg,#fff8e8_0%,#fff3d6_45%,#ffffff_100%)] px-6 py-5">

@@ -1,5 +1,6 @@
 
 export type AuthStatus = 'unauthenticated' | 'guest' | 'authenticated';
+export type AuthProvider = 'local' | 'apple';
 
 export type GoalType = '7_DAY' | '21_DAY';
 export type GoalStatus = 'active' | 'paused' | 'completed' | 'failed';
@@ -122,6 +123,7 @@ export interface User {
   email?: string;
   avatar?: string;
   isOfficial?: boolean;
+  authProvider?: AuthProvider;
   status: AuthStatus;
 }
 

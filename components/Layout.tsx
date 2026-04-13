@@ -52,6 +52,9 @@ export const Layout: React.FC<LayoutProps> = ({
     paddingRight: 'calc(env(safe-area-inset-right) + 1.25rem)',
     paddingLeft: 'calc(env(safe-area-inset-left) + 1.25rem)'
   } as const;
+  const drawerBodySafeStyle = {
+    paddingBottom: 'calc(env(safe-area-inset-bottom) + 1rem)'
+  } as const;
   const mainSafeStyle = {
     paddingBottom: 'calc(env(safe-area-inset-bottom) + 6rem)'
   } as const;
@@ -260,7 +263,7 @@ export const Layout: React.FC<LayoutProps> = ({
         {isSoftShellView && isNavDrawerOpen && (
           <div className="absolute inset-0 z-30">
             <div className="absolute inset-0 bg-slate-900/28 backdrop-blur-[2px]" onClick={() => setIsNavDrawerOpen(false)} />
-            <aside className="absolute left-0 top-0 h-full w-[88%] max-w-[360px] overflow-y-auto bg-white shadow-2xl ring-1 ring-slate-200 animate-in slide-in-from-left duration-300">
+            <aside className="absolute left-0 top-0 h-full w-[88%] max-w-[360px] overflow-y-auto bg-white shadow-2xl ring-1 ring-slate-200 animate-in slide-in-from-left duration-300" style={drawerBodySafeStyle}>
               <div
                 className="sticky top-0 z-10 border-b border-slate-100 bg-white/95 pb-4 backdrop-blur-sm"
                 style={drawerHeaderSafeStyle}

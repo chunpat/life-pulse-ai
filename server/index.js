@@ -93,6 +93,7 @@ cleanupDuplicateUserUniqueIndexes(sequelize)
     return sequelize.sync(getDatabaseSyncOptions());
   })
   .then(async () => {
+    await User.ensureAppleAuthSchema();
     await ensureOfficialPlanTemplates();
     console.log('Database connected and synced');
     app.listen(PORT, '0.0.0.0', () => {

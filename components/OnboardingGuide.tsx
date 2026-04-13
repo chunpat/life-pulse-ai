@@ -1,4 +1,5 @@
 import React from 'react';
+import { buildSafeAreaPaddingStyle } from '../utils/safeArea';
 
 interface OnboardingGuideProps {
   onGenericClose: () => void;
@@ -6,6 +7,7 @@ interface OnboardingGuideProps {
 
 const OnboardingGuide: React.FC<OnboardingGuideProps> = ({ onGenericClose }) => {
   const [step, setStep] = React.useState(0);
+  const guideSafeStyle = buildSafeAreaPaddingStyle({ top: '1rem', right: '1rem', bottom: '1rem', left: '1rem' });
 
   const steps = [
     {
@@ -42,7 +44,7 @@ const OnboardingGuide: React.FC<OnboardingGuideProps> = ({ onGenericClose }) => 
   const currentStep = steps[step];
 
   return (
-    <div className="absolute inset-0 z-50 bg-slate-900/60 backdrop-blur-[1px] flex flex-col">
+    <div className="absolute inset-0 z-50 flex flex-col bg-slate-900/60 backdrop-blur-[1px]" style={guideSafeStyle}>
        {/* Highlighting Area (Fake spotlight can be complex, using simple overlay logic) */}
       
       {/* Tooltip Card */}

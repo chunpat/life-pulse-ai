@@ -4,7 +4,9 @@ import { useTranslation } from 'react-i18next';
 import { parseLifeLog, getSmartSuggestions } from '../services/qwenService';
 import { createFinanceRecord, deleteFinanceRecordsByLogId } from '../services/financeService';
 import { storageService } from '../services/storageService';
+import { runtimeConfig } from '../services/runtimeConfig';
 import { ChatMessage, Goal, GoalCreateInput, LogEntry, ParseResult, Plan, PlanCreateInput, PlanParseResult, RewardProfile } from '../types';
+import { buildSafeAreaInsetStyle, buildSafeAreaPaddingStyle } from '../utils/safeArea';
 import { formatMessageTime, shouldShowTimeLabel } from '../utils/formatMessageTime';
 import GoalPlanner from './GoalPlanner';
 import NoticeToast from './NoticeToast';
@@ -32,6 +34,38 @@ const DRAFT_STORAGE_KEY = 'lifepulse_unconfirmed_draft';
 const DISMISSED_SMART_SUGGESTION_KEY = 'lifepulse_dismissed_smart_suggestion';
 const DRAFT_STALE_HOURS = 24;
 const UNDO_WINDOW_MS = 5 * 60 * 1000;
+const INLINE_INPUT_FOCUS_RETRY_DELAYS = runtimeConfig.isNativeIos ? [0, 60, 180] : [0];
+
+const focusTextControl = (element: HTMLInputElement | HTMLTextAreaElement | null) => {
+  if (!element) return;
+
+  const focus = () => {
+    element.focus();
+
+    if ('setSelectionRange' in element) {
+      const cursorPosition = element.value.length;
+      element.setSelectionRange(cursorPosition, cursorPosition);
+    }
+  };
+
+  focus();
+
+  INLINE_INPUT_FOCUS_RETRY_DELAYS.slice(1).forEach((delay) => {
+    window.setTimeout(focus, delay);
+  });
+};
+
+const focusInlineInputFromUserGesture = (
+  event: React.MouseEvent<HTMLElement> | React.TouchEvent<HTMLElement>,
+  input: HTMLInputElement | null
+) => {
+  const target = event.target;
+  if (target instanceof HTMLElement && target.closest('button')) {
+    return;
+  }
+
+  focusTextControl(input);
+};
 
 const getSuggestionKey = (suggestion: { content: string; type: string; trigger: string } | null) => {
   if (!suggestion) return '';
@@ -172,6 +206,7 @@ const Logger: React.FC<LoggerProps> = ({
   onDeleteGoal
 }) => {
   const { t, i18n } = useTranslation();
+  const prefersInlineKeyboard = runtimeConfig.isNativeIos;
   const [inputText, setInputText] = useState('');
   const [draftParse, setDraftParse] = useState<ReturnType<typeof buildDraftPreview> | null>(null);
   const [draftTriggerMessageId, setDraftTriggerMessageId] = useState<string | null>(null);
@@ -195,7 +230,7 @@ const Logger: React.FC<LoggerProps> = ({
   const [sidebarTab, setSidebarTab] = useState<'goals' | 'record-add'>('goals');
   const [composerMode, setComposerMode] = useState<'chat' | 'record-add'>('chat');
   const [imageDirectAnalyze, setImageDirectAnalyze] = useState(false);
-  const [showInlineKeyboard, setShowInlineKeyboard] = useState(false);
+  const [showInlineKeyboard, setShowInlineKeyboard] = useState(prefersInlineKeyboard);
   const [notice, setNotice] = useState<{ message: string; tone: 'success' | 'error' | 'info' } | null>(null);
   const [expandedPendingMessageId, setExpandedPendingMessageId] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(() => Date.now());
@@ -217,6 +252,20 @@ const Logger: React.FC<LoggerProps> = ({
   const shouldSubmitVoiceOnEndRef = useRef(false);
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
+  const drawerHeaderSafeStyle = buildSafeAreaPaddingStyle({ top: '1rem', right: '1.25rem', left: '1.25rem' });
+  const centeredModalSafeStyle = buildSafeAreaPaddingStyle({ top: '1rem', right: '1rem', bottom: '1rem', left: '1rem' });
+  const shareOverlaySafeStyle = buildSafeAreaPaddingStyle({ top: '1rem', right: '1rem', bottom: '1.5rem', left: '1rem' });
+  const shareArrowSafeStyle = buildSafeAreaInsetStyle({ top: '0.5rem', right: '1.5rem' });
+  const timelineGroupStickySafeStyle = buildSafeAreaInsetStyle({ top: '5.5rem' });
+  const composerSheetStyle = false
+    ? {
+        maxHeight: 'calc(100vh - env(safe-area-inset-top) - 0.5rem)',
+        paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)'
+      }
+    : undefined;
+  const composerHeaderSafeStyle = false
+    ? buildSafeAreaPaddingStyle({ top: '0.75rem' })
+    : undefined;
 
   const activeGoals = goals.filter((goal) => goal.status === 'active');
   const primaryGoal = activeGoals.find((goal) => goal.rewardRole === 'primary') || activeGoals[0] || null;
@@ -392,7 +441,7 @@ const Logger: React.FC<LoggerProps> = ({
     if (!isComposerOpen) return;
 
     const timer = window.setTimeout(() => {
-      textareaRef.current?.focus();
+      focusTextControl(textareaRef.current);
     }, 120);
 
     return () => window.clearTimeout(timer);
@@ -402,7 +451,7 @@ const Logger: React.FC<LoggerProps> = ({
     if (isComposerOpen || !showInlineKeyboard) return;
 
     const timer = window.setTimeout(() => {
-      inlineInputRef.current?.focus();
+      focusTextControl(inlineInputRef.current);
     }, 80);
 
     return () => window.clearTimeout(timer);
@@ -832,12 +881,21 @@ const Logger: React.FC<LoggerProps> = ({
       setExpandedPendingMessageId(pendingMsgId);
     }
 
-    setShowInlineKeyboard(true);
     setDraftParse(null);
     clearPersistedDraft();
-    window.setTimeout(() => {
-      inlineInputRef.current?.focus();
-    }, 0);
+
+    setShowInlineKeyboard(true);
+    focusTextControl(inlineInputRef.current);
+  };
+
+  const handleInlineInputContainerPress = (event: React.MouseEvent<HTMLFormElement> | React.TouchEvent<HTMLFormElement>) => {
+    focusInlineInputFromUserGesture(event, inlineInputRef.current);
+  };
+
+  const handleSwitchToVoiceInput = () => {
+    inlineInputRef.current?.blur();
+    textareaRef.current?.blur();
+    setShowInlineKeyboard(false);
   };
 
   const handleApplyDraftTimeSuggestion = (draftData: NonNullable<ReturnType<typeof buildDraftPreview>>) => {
@@ -1121,6 +1179,7 @@ const Logger: React.FC<LoggerProps> = ({
 
     setComposerMode('chat');
     setInputText(text || '');
+
     setShowInlineKeyboard(true);
     onCloseComposer();
   };
@@ -1193,7 +1252,7 @@ const Logger: React.FC<LoggerProps> = ({
     setCurrentLocation(undefined);
     setDraftParse(null);
     clearPersistedDraft();
-    setShowInlineKeyboard(false);
+    setShowInlineKeyboard(prefersInlineKeyboard);
     onCloseComposer();
   };
 
@@ -1545,8 +1604,8 @@ const Logger: React.FC<LoggerProps> = ({
       {showTimelineDrawer && (
         <div className="fixed inset-0 z-[88]">
           <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-[2px]" onClick={() => setShowTimelineDrawer(false)} />
-          <aside className="absolute right-0 top-0 h-full w-[86%] max-w-[380px] overflow-y-auto border-l border-slate-200 bg-white shadow-2xl animate-in slide-in-from-right duration-300">
-            <div className="sticky top-0 z-10 border-b border-slate-100 bg-white/95 px-5 py-4 backdrop-blur-sm">
+          <aside className="absolute right-0 top-0 h-full w-[86%] max-w-[380px] overflow-y-auto border-l border-slate-200 bg-white shadow-2xl animate-in slide-in-from-right duration-300" style={buildSafeAreaPaddingStyle({ bottom: '1rem' })}>
+            <div className="sticky top-0 z-10 border-b border-slate-100 bg-white/95 pb-4 backdrop-blur-sm" style={drawerHeaderSafeStyle}>
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">
@@ -1573,7 +1632,7 @@ const Logger: React.FC<LoggerProps> = ({
               <div className="space-y-6">
                 {timelineGroups.map((group) => (
                   <section key={group.key} className="space-y-4">
-                    <div className="sticky top-[88px] z-[1] -mx-1 px-1 py-1">
+                    <div className="sticky z-[1] -mx-1 px-1 py-1" style={timelineGroupStickySafeStyle}>
                       <div className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500 ring-1 ring-slate-200">
                         {group.key === 'today'
                           ? t('logger.timeline_group_today', '今天')
@@ -1623,8 +1682,8 @@ const Logger: React.FC<LoggerProps> = ({
       {showGoalDrawer && (
         <div className="fixed inset-0 z-[85]">
           <div className="absolute inset-0 bg-slate-900/25 backdrop-blur-[2px]" onClick={() => setShowGoalDrawer(false)} />
-          <aside className="absolute left-0 top-0 h-full w-[88%] max-w-[360px] overflow-y-auto bg-white shadow-2xl ring-1 ring-slate-200 animate-in slide-in-from-left duration-300">
-            <div className="sticky top-0 z-10 border-b border-slate-100 bg-white/95 px-5 py-4 backdrop-blur-sm">
+          <aside className="absolute left-0 top-0 h-full w-[88%] max-w-[360px] overflow-y-auto bg-white shadow-2xl ring-1 ring-slate-200 animate-in slide-in-from-left duration-300" style={buildSafeAreaPaddingStyle({ bottom: '1rem' })}>
+            <div className="sticky top-0 z-10 border-b border-slate-100 bg-white/95 pb-4 backdrop-blur-sm" style={drawerHeaderSafeStyle}>
               <div className="mb-4">
                 <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">
                   {t('logger.sidebar_menu_title')}
@@ -1750,7 +1809,7 @@ const Logger: React.FC<LoggerProps> = ({
 
       <div className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] z-20 flex justify-center px-3">
         <div className="pointer-events-auto w-full max-w-[400px] px-1">
-          <div className="rounded-[2rem] border border-slate-200 bg-white/95 px-3 py-3 shadow-2xl shadow-slate-200/70 backdrop-blur-xl">
+          <div className={`border bg-white/92 px-3 py-3 backdrop-blur-xl ${prefersInlineKeyboard ? 'rounded-[2.05rem] border-white/90 shadow-[0_20px_44px_rgba(15,23,42,0.10)]' : 'rounded-[2rem] border-slate-200 shadow-2xl shadow-slate-200/70'}`}>
             {isListening && (
               <div className="mb-3 rounded-[1.4rem] border border-red-100 bg-red-50 px-4 py-3 shadow-sm">
                 <div className="flex items-center justify-between gap-3">
@@ -1769,24 +1828,37 @@ const Logger: React.FC<LoggerProps> = ({
               </div>
             )}
 
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 items-center gap-2">
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isListening}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 ring-1 ring-slate-200 transition-colors hover:bg-amber-50 hover:text-amber-700"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-100/95 text-slate-500 ring-1 ring-slate-200 transition-colors hover:bg-slate-50 hover:text-amber-700"
                 title={t('logger.camera_or_upload')}
               >
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 7h4l2-2h6l2 2h4v11a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 16a3 3 0 100-6 3 3 0 000 6z" /></svg>
               </button>
               {showInlineKeyboard ? (
-                <form onSubmit={handleSubmit} className="flex flex-1 items-center gap-2 rounded-full bg-slate-50 px-3 py-1.5 ring-1 ring-slate-200">
+                <form
+                  onSubmit={handleSubmit}
+                  onClick={handleInlineInputContainerPress}
+                  onTouchEnd={handleInlineInputContainerPress}
+                  className="flex min-w-0 flex-1 items-center gap-2 rounded-full bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)] px-3 py-1.5 ring-1 ring-slate-200"
+                >
                   <input
                     ref={inlineInputRef}
+                    type="text"
                     value={inputText}
                     onChange={(event) => setInputText(event.target.value)}
                     placeholder={t('logger.placeholder')}
-                    className="min-w-0 flex-1 border-none bg-transparent px-1 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-0"
+                    inputMode="text"
+                    enterKeyHint="send"
+                    autoCapitalize="sentences"
+                    autoCorrect="on"
+                    autoComplete="off"
+                    spellCheck={false}
+                    lang={i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US'}
+                    className="min-w-0 flex-1 border-none bg-transparent px-1 py-2 text-base text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-0"
                   />
                   <button
                     type="submit"
@@ -1819,12 +1891,20 @@ const Logger: React.FC<LoggerProps> = ({
               )}
               <button
                 type="button"
-                onClick={handleOpenInlineKeyboard}
+                onClick={showInlineKeyboard ? handleSwitchToVoiceInput : handleOpenInlineKeyboard}
                 disabled={isListening}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white transition-colors hover:bg-slate-800"
-                title={t('logger.keyboard_input')}
+                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors ${isListening ? 'bg-red-500 text-white' : prefersInlineKeyboard ? 'bg-slate-900 text-white shadow-lg shadow-slate-200/80 hover:bg-slate-800' : 'bg-slate-900 text-white hover:bg-slate-800'}`}
+                title={showInlineKeyboard ? t('logger.voice_input') : t('logger.keyboard_input')}
               >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8h16a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 12h.01M10 12h.01M13 12h.01M16 12h.01M7 15h10" /></svg>
+                {showInlineKeyboard ? (
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 18.5a3.5 3.5 0 003.5-3.5V8a3.5 3.5 0 10-7 0v7a3.5 3.5 0 003.5 3.5z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11.5a7 7 0 01-14 0" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 18.5v3" />
+                  </svg>
+                ) : (
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8h16a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 12h.01M10 12h.01M13 12h.01M16 12h.01M7 15h10" /></svg>
+                )}
               </button>
             </div>
           </div>
@@ -1832,10 +1912,10 @@ const Logger: React.FC<LoggerProps> = ({
       </div>
 
       {isComposerOpen && (
-        <div className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div className="fixed inset-0 z-[90] flex items-end justify-center p-0 sm:items-center sm:p-4" style={centeredModalSafeStyle}>
           <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={handleCloseComposer} />
-          <div className="relative z-10 w-full sm:max-w-xl bg-[#fffaf0] rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl border border-slate-100 max-h-[88vh] overflow-y-auto">
-            <div className="sticky top-0 rounded-t-[2rem] border-b border-slate-100 bg-[#fffaf0]/95 px-5 pt-5 pb-4 backdrop-blur-sm">
+          <div className="relative z-10 w-full max-h-[88vh] overflow-y-auto rounded-t-[2rem] border border-slate-100 bg-[#fffaf0] shadow-2xl sm:max-w-xl sm:rounded-[2rem]" style={composerSheetStyle}>
+            <div className="sticky top-0 rounded-t-[2rem] border-b border-slate-100 bg-[#fffaf0]/95 px-5 pt-5 pb-4 backdrop-blur-sm" style={composerHeaderSafeStyle}>
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-600">
@@ -1858,7 +1938,7 @@ const Logger: React.FC<LoggerProps> = ({
               </div>
             </div>
 
-            <div className="p-5 space-y-4">
+            <div className="space-y-4 p-5">
               <div className="flex justify-start">
                 <div className="max-w-[88%] rounded-[1.5rem] rounded-bl-md bg-slate-900 px-4 py-3 text-sm leading-relaxed text-white shadow-sm">
                   {t('logger.chat_assistant_modal_intro')}
@@ -1868,6 +1948,7 @@ const Logger: React.FC<LoggerProps> = ({
               <div className="relative rounded-[2rem] border border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8fafc_100%)] p-5 shadow-sm transition-shadow hover:shadow-md">
                 <textarea
                   ref={textareaRef}
+                  autoFocus
                   value={inputText}
                   onChange={(e) => {
                     setInputText(e.target.value);
@@ -1875,8 +1956,12 @@ const Logger: React.FC<LoggerProps> = ({
                       setDraftParse(null);
                     }
                   }}
+                  onFocus={() => focusTextControl(textareaRef.current)}
                   placeholder={t('logger.placeholder')}
-                  className="min-h-[140px] w-full resize-none rounded-[1.5rem] border-none bg-transparent text-lg text-slate-800 placeholder:text-slate-400 focus:ring-0 pb-12"
+                  enterKeyHint="send"
+                  autoCapitalize="sentences"
+                  autoCorrect="on"
+                  className="min-h-[140px] w-full resize-none rounded-[1.5rem] border-none bg-transparent pb-12 text-lg text-slate-800 placeholder:text-slate-400 focus:ring-0"
                 />
 
                 {draftParse && (
@@ -2072,11 +2157,12 @@ const Logger: React.FC<LoggerProps> = ({
       {/* 微信分享引导蒙层 */}
       {showShareOverlay && (
         <div 
-          className="fixed inset-0 z-[100] bg-black/90 flex flex-col items-center justify-start pt-20 animate-in fade-in duration-200"
+          className="fixed inset-0 z-[100] flex flex-col items-center justify-start bg-black/90 animate-in fade-in duration-200"
+          style={shareOverlaySafeStyle}
           onClick={() => setShowShareOverlay(false)}
         >
           {/* 指示箭头 */}
-          <div className="absolute top-4 right-6 text-white flex flex-col items-end">
+          <div className="absolute flex flex-col items-end text-white" style={shareArrowSafeStyle}>
              {/* 修正箭头的 SVG 路径，使其更形象地指向右上角菜单 */}
              <svg className="w-16 h-16 animate-bounce text-white/90" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))' }}>
                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 5h7m0 0v7m0-7L8 14" />
@@ -2109,7 +2195,7 @@ const Logger: React.FC<LoggerProps> = ({
 
       {/* 游客限制弹窗 */}
       {showLimitModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" style={centeredModalSafeStyle}>
           <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 text-center animate-in fade-in zoom-in duration-300">
             <div className="w-16 h-16 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center mx-auto mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2138,7 +2224,7 @@ const Logger: React.FC<LoggerProps> = ({
         </div>
       )}
       {showUndoConfirm && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" style={centeredModalSafeStyle}>
           <div className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 text-center animate-in fade-in zoom-in duration-300">
             <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">

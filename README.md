@@ -84,6 +84,16 @@ npm run dev
 
 浏览器访问 `http://localhost:3000` 即可使用。
 
+#### Apple 登录相关配置
+
+当前仓库已接入原生 iOS Apple 登录按钮，后端会直接校验 Apple 返回的 identity token。
+
+- 前端可选配置根目录 `.env`：`VITE_APPLE_CLIENT_ID`，默认回退到 `ai.lifepulse.app`
+- 后端建议在 `server/.env` 配置：`APPLE_CLIENT_IDS=ai.lifepulse.app`
+- 若后续同时接 Web 版 Apple 登录，可把多个 client id 用逗号拼接，例如：`APPLE_CLIENT_IDS=ai.lifepulse.app,com.example.web`
+
+第一次让现有数据库接入 Apple 登录时，服务启动会自动补齐 `Users.authProvider` 和 `Users.appleSubject` 字段及唯一索引，无需手动改表。
+
 ### 4. iOS 原生壳开发（已开始）
 
 当前仓库已经接入 Capacitor 基础配置、iOS 工程壳和自定义计划同步插件骨架。
@@ -93,6 +103,7 @@ npm run dev
 - Xcode（不是仅 Command Line Tools）
 - CocoaPods
 - 根目录 `.env` 或 `.env.local` 中配置 `VITE_NATIVE_API_BASE_URL`，指向你的后端地址，例如 `http://192.168.1.10:5002`
+- 在 Xcode 的 Signing & Capabilities 中为 App Target 打开 `Sign In with Apple`
 
 常用命令：
 
@@ -135,7 +146,8 @@ sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
     - 针对不同语境优化 AI Prompt，确保洞察建议符合当地文化。
 - [ ] **App Store / Google Play 上架**: 
     - 使用 **Capacitor** 进行原生封装，适配 iOS 安全区域与原生手势。
-    - 集成 Apple Sign In 与 Google Login。
+    - [x] 集成原生 iOS Apple Sign In
+    - [ ] 集成 Google Login。
 - [ ] **全球化适配**:
     - **多币种支持**: 财务模块支持根据地区自动切换货币符号 ($, €, £, ¥) 及汇率估算。
     - **时区智能处理**: 解决跨国旅行时的时区偏移问题，确保日志时间准确。

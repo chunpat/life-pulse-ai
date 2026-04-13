@@ -1,4 +1,5 @@
 import React from 'react';
+import { buildSafeAreaInsetStyle, buildSafeAreaPaddingStyle } from '../utils/safeArea';
 
 type NoticeTone = 'success' | 'error' | 'info';
 
@@ -30,8 +31,13 @@ const TONE_LABEL_MAP: Record<NoticeTone, string> = {
 const NoticeToast: React.FC<NoticeToastProps> = ({ open, message, tone = 'info', onClose }) => {
   if (!open || !message) return null;
 
+  const noticeSafeStyle = {
+    ...buildSafeAreaInsetStyle({ top: '0.75rem' }),
+    ...buildSafeAreaPaddingStyle({ left: '1rem', right: '1rem' })
+  };
+
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-20 z-[120] flex justify-center px-4">
+    <div className="pointer-events-none fixed inset-x-0 z-[120] flex justify-center" style={noticeSafeStyle}>
       <div className={`pointer-events-auto flex w-full max-w-[360px] items-start gap-3 rounded-[1.4rem] border px-4 py-3 shadow-xl backdrop-blur-sm animate-in fade-in slide-in-from-top-2 duration-200 ${TONE_CLASS_MAP[tone]}`}>
         <span className={`mt-0.5 inline-flex shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black tracking-[0.18em] ${TONE_BADGE_MAP[tone]}`}>
           {TONE_LABEL_MAP[tone]}

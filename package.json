@@ -16,6 +16,7 @@
     "ios:build": "npm run build && npm run cap:sync:ios"
   },
   "dependencies": {
+    "@capacitor-community/apple-sign-in": "^7.1.0",
     "@capacitor/core": "^7.4.3",
     "i18next": "^25.7.4",
     "i18next-browser-languagedetector": "^8.2.0",
