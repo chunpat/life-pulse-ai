@@ -42,6 +42,24 @@ export const Layout: React.FC<LayoutProps> = ({
   const isLoggerView = currentView === ViewMode.LOGGER;
   const isEdgeBackView = currentView === ViewMode.PLAN || currentView === ViewMode.FINANCE || currentView === ViewMode.TIMELINE;
   const isSoftShellView = currentView === ViewMode.LOGGER || currentView === ViewMode.TIMELINE || currentView === ViewMode.PLAN || currentView === ViewMode.FINANCE;
+  const headerSafeStyle = {
+    paddingTop: isSoftShellView ? 'calc(env(safe-area-inset-top) + 1rem)' : 'calc(env(safe-area-inset-top) + 1.5rem)',
+    paddingRight: 'calc(env(safe-area-inset-right) + 1rem)',
+    paddingLeft: 'calc(env(safe-area-inset-left) + 1rem)'
+  } as const;
+  const drawerHeaderSafeStyle = {
+    paddingTop: 'calc(env(safe-area-inset-top) + 1rem)',
+    paddingRight: 'calc(env(safe-area-inset-right) + 1.25rem)',
+    paddingLeft: 'calc(env(safe-area-inset-left) + 1.25rem)'
+  } as const;
+  const mainSafeStyle = {
+    paddingBottom: 'calc(env(safe-area-inset-bottom) + 6rem)'
+  } as const;
+  const floatingComposerSafeStyle = {
+    bottom: 'calc(env(safe-area-inset-bottom) + 1.5rem)',
+    paddingLeft: 'calc(env(safe-area-inset-left) + 1rem)',
+    paddingRight: 'calc(env(safe-area-inset-right) + 1rem)'
+  } as const;
   const currentViewLabel = currentView === ViewMode.LOGGER
     ? t('nav.chat_home')
     : currentView === ViewMode.PLAN
@@ -121,7 +139,10 @@ export const Layout: React.FC<LayoutProps> = ({
         {showGuide && <OnboardingGuide onGenericClose={onCloseGuide} />}
 
         {/* Dynamic Header */}
-        <header className={`sticky top-0 z-20 ${isSoftShellView ? 'border-b-0 bg-transparent px-4 py-4' : 'border-b border-slate-100 bg-white/80 px-6 py-6 backdrop-blur-md'}`}>
+        <header
+          className={`sticky top-0 z-20 ${isSoftShellView ? 'border-b-0 bg-transparent pb-4' : 'border-b border-slate-100 bg-white/80 pb-6 backdrop-blur-md'}`}
+          style={headerSafeStyle}
+        >
           <div className="flex items-center justify-between">
             {isSoftShellView ? (
               <div className="flex items-center gap-2">
@@ -240,7 +261,10 @@ export const Layout: React.FC<LayoutProps> = ({
           <div className="absolute inset-0 z-30">
             <div className="absolute inset-0 bg-slate-900/28 backdrop-blur-[2px]" onClick={() => setIsNavDrawerOpen(false)} />
             <aside className="absolute left-0 top-0 h-full w-[88%] max-w-[360px] overflow-y-auto bg-white shadow-2xl ring-1 ring-slate-200 animate-in slide-in-from-left duration-300">
-              <div className="sticky top-0 z-10 border-b border-slate-100 bg-white/95 px-5 py-4 backdrop-blur-sm">
+              <div
+                className="sticky top-0 z-10 border-b border-slate-100 bg-white/95 pb-4 backdrop-blur-sm"
+                style={drawerHeaderSafeStyle}
+              >
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">{t('nav.drawer_title')}</p>
@@ -369,7 +393,10 @@ export const Layout: React.FC<LayoutProps> = ({
         )}
 
         {/* Scrollable Content Area */}
-          <main className={`flex-1 overflow-y-auto scrollbar-hide ${isSoftShellView ? 'bg-transparent pb-24' : 'bg-slate-50 pb-24'}`}>
+          <main
+            className={`flex-1 overflow-y-auto scrollbar-hide ${isSoftShellView ? 'bg-transparent' : 'bg-slate-50'}`}
+            style={mainSafeStyle}
+          >
             <div
               className={`${isLoggerView ? 'h-full min-h-full px-0 pt-0 pb-0' : 'px-4 py-2 min-h-full'}`}
               onTouchStart={handleContentTouchStart}
@@ -381,7 +408,10 @@ export const Layout: React.FC<LayoutProps> = ({
 
         {/* Floating Composer Button */}
           {!isLoggerView && !isEdgeBackView && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-6 z-30 flex justify-center px-4">
+          <div
+            className="pointer-events-none absolute inset-x-0 z-30 flex justify-center"
+            style={floatingComposerSafeStyle}
+          >
           <div className="pointer-events-auto relative flex items-center gap-2 rounded-full border border-slate-200 bg-white/92 px-2 py-2 shadow-2xl shadow-slate-200/70 backdrop-blur-xl">
             <button
               id="nav-logger"
