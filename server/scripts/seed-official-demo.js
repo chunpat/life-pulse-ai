@@ -2,7 +2,7 @@ const { Op } = require('sequelize');
 const { randomUUID } = require('crypto');
 const bcrypt = require('bcryptjs');
 
-require('dotenv').config();
+require('../config/loadEnv');
 
 const sequelize = require('../config/database');
 const User = require('../models/User');

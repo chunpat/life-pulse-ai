@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
+require('./config/loadEnv');
 
 // Polyfill fetch for Node.js < 18 (required by OpenAI SDK)
 if (!globalThis.fetch) {
@@ -17,7 +18,6 @@ if (!globalThis.fetch) {
   }
 }
 
-require('dotenv').config();
 const sequelize = require('./config/database');
 const {
   cleanupDuplicateUserUniqueIndexes,
@@ -93,7 +93,7 @@ cleanupDuplicateUserUniqueIndexes(sequelize)
     return sequelize.sync(getDatabaseSyncOptions());
   })
   .then(async () => {
-    await User.ensureAppleAuthSchema();
+    await User.ensureUserSchema();
     await ensureOfficialPlanTemplates();
     console.log('Database connected and synced');
     app.listen(PORT, '0.0.0.0', () => {

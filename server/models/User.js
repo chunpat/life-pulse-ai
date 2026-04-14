@@ -63,10 +63,32 @@ User.prototype.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-const ensureAppleAuthSchema = async () => {
+const ensureUserSchema = async () => {
   const queryInterface = sequelize.getQueryInterface();
   const tableName = User.getTableName();
   const columns = await queryInterface.describeTable(tableName);
+
+  if (!columns.referrerId) {
+    await queryInterface.addColumn(tableName, 'referrerId', {
+      type: DataTypes.UUID,
+      allowNull: true
+    });
+  }
+
+  if (!columns.source) {
+    await queryInterface.addColumn(tableName, 'source', {
+      type: DataTypes.STRING,
+      allowNull: true
+    });
+  }
+
+  if (!columns.isOfficial) {
+    await queryInterface.addColumn(tableName, 'isOfficial', {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false
+    });
+  }
 
   if (!columns.authProvider) {
     await queryInterface.addColumn(tableName, 'authProvider', {
@@ -96,6 +118,7 @@ const ensureAppleAuthSchema = async () => {
   }
 };
 
-User.ensureAppleAuthSchema = ensureAppleAuthSchema;
+User.ensureUserSchema = ensureUserSchema;
+User.ensureAppleAuthSchema = ensureUserSchema;
 
 module.exports = User;

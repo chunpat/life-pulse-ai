@@ -1,5 +1,5 @@
 const COS = require('cos-nodejs-sdk-v5');
-require('dotenv').config();
+require('./loadEnv');
 
 const cos = new COS({
     SecretId: process.env.COS_SECRET_ID,
