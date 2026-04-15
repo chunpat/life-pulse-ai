@@ -143,21 +143,32 @@ function normalizeTimestamp(value) {
 function getTimeZoneOffsetMinutes(timeZone, date = new Date()) {
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone,
-    timeZoneName: 'shortOffset',
-    hour: '2-digit'
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23'
   });
-  const parts = formatter.formatToParts(date);
-  const offsetPart = parts.find((part) => part.type === 'timeZoneName')?.value || 'GMT+0';
-  const match = offsetPart.match(/GMT([+-])(\d{1,2})(?::?(\d{2}))?/i);
+  const parts = formatter.formatToParts(date).reduce((acc, part) => {
+    if (part.type !== 'literal') {
+      acc[part.type] = part.value;
+    }
+    return acc;
+  }, {});
 
-  if (!match) {
-    return 0;
-  }
+  const zonedTimestamp = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour),
+    Number(parts.minute),
+    Number(parts.second || 0),
+    0
+  );
 
-  const sign = match[1] === '-' ? -1 : 1;
-  const hours = Number(match[2] || 0);
-  const minutes = Number(match[3] || 0);
-  return sign * (hours * 60 + minutes);
+  return Math.round((zonedTimestamp - date.getTime()) / (60 * 1000));
 }
 
 function getDateTimePartsInTimeZone(timeZone, date = new Date()) {

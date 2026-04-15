@@ -474,6 +474,8 @@
     "undo_confirm_no": "Cancel",
     "smart_suggestion": "Smart Tips",
     "voice_error_title": "Voice Input Failed",
+    "voice_unsupported_hint": "Speech recognition is not available in this browser environment. Switch to keyboard input or use a supported browser.",
+    "voice_ios_hint": "Speech recognition inside the iOS native web container is unreliable. Even with microphone permission, it may still be unavailable. Use keyboard input for now, or switch to a native speech plugin later.",
     "wechat_error": "WeChat recording failed. Please ensure microphone access is granted.",
     "wechat_hint": "WeChat environment detected. iOS WeChat may block native voice APIs. Open in Safari or check JS-SDK config.",
     "browser_voice_hint": "Please enable microphone permission in the address bar (🔒 icon) and try again.",

@@ -24,6 +24,10 @@
 	<true/>
 	<key>NSCalendarsUsageDescription</key>
 	<string>LifePulse AI 需要访问你的日历，以便将应用内计划同步到 iOS 日历。</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>LifePulse AI 需要使用麦克风，方便你通过语音快速记录日常、账目和计划。</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>LifePulse AI 需要语音识别权限，用于将你的语音转换成文字并生成记录、计划或记账内容。</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoadsInWebContent</key>

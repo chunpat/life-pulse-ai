@@ -3,10 +3,60 @@ import { apiClient } from './apiClient';
 
 const API_BASE_URL = '/api/ai';
 
+export interface SmartSuggestion {
+  id?: string;
+  content: string;
+  type: string;
+  trigger: string;
+}
+
 export interface ParseContextMessage {
   role: 'user' | 'assistant';
   content: string;
 }
+
+export const normalizeSmartSuggestion = (payload: unknown): SmartSuggestion | null => {
+  const candidates = Array.isArray((payload as { suggestions?: unknown[] } | null)?.suggestions)
+    ? (payload as { suggestions: unknown[] }).suggestions
+    : [payload];
+
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== 'object') {
+      continue;
+    }
+
+    const content = typeof (candidate as { content?: unknown }).content === 'string'
+      ? (candidate as { content: string }).content.trim()
+      : '';
+
+    if (!content) {
+      continue;
+    }
+
+    const type = typeof (candidate as { type?: unknown }).type === 'string'
+      && (candidate as { type: string }).type.trim()
+      ? (candidate as { type: string }).type.trim()
+      : 'other';
+
+    const trigger = typeof (candidate as { trigger?: unknown }).trigger === 'string'
+      ? (candidate as { trigger: string }).trigger.trim()
+      : '';
+
+    const id = typeof (candidate as { id?: unknown }).id === 'string'
+      && (candidate as { id: string }).id.trim()
+      ? (candidate as { id: string }).id.trim()
+      : undefined;
+
+    return {
+      id,
+      content,
+      type,
+      trigger
+    };
+  }
+
+  return null;
+};
 
 export const parseLifeLog = async (
   text: string,
@@ -35,15 +85,15 @@ export const getDailyInsight = async (logs: LogEntry[], period: 'day' | 'week' |
   }
 };
 
-export const getSmartSuggestions = async (logs: LogEntry[], lang: string = 'zh'): Promise<any> => {
-  if (logs.length === 0) return { suggestions: [] };
+export const getSmartSuggestions = async (logs: LogEntry[], lang: string = 'zh'): Promise<SmartSuggestion | null> => {
+  if (logs.length === 0) return null;
 
   const now = new Date();
   const currentHour = now.getHours();
   const currentWeekday = now.getDay(); // 0-6
 
   try {
-    return await apiClient(`${API_BASE_URL}/suggestions`, {
+    const data = await apiClient(`${API_BASE_URL}/suggestions`, {
       method: 'POST',
       body: { 
         logs: logs.slice(0, 50), 
@@ -52,7 +102,8 @@ export const getSmartSuggestions = async (logs: LogEntry[], lang: string = 'zh')
         lang
       }
     });
+    return normalizeSmartSuggestion(data);
   } catch (e) {
-    return { suggestions: [] };
+    return null;
   }
 };

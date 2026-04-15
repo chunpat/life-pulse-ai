@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { parseLifeLog, getSmartSuggestions } from '../services/qwenService';
+import { parseLifeLog, getSmartSuggestions, normalizeSmartSuggestion, SmartSuggestion } from '../services/qwenService';
 import { createFinanceRecord, deleteFinanceRecordsByLogId } from '../services/financeService';
 import { storageService } from '../services/storageService';
 import { runtimeConfig } from '../services/runtimeConfig';
@@ -67,8 +67,8 @@ const focusInlineInputFromUserGesture = (
   focusTextControl(input);
 };
 
-const getSuggestionKey = (suggestion: { content: string; type: string; trigger: string } | null) => {
-  if (!suggestion) return '';
+const getSuggestionKey = (suggestion: SmartSuggestion | null) => {
+  if (!suggestion?.content.trim()) return '';
   return `${suggestion.type}::${suggestion.trigger}::${suggestion.content}`;
 };
 
@@ -206,16 +206,17 @@ const Logger: React.FC<LoggerProps> = ({
   onDeleteGoal
 }) => {
   const { t, i18n } = useTranslation();
-  const prefersInlineKeyboard = runtimeConfig.isNativeIos;
+  const isNativeIos = runtimeConfig.isNativeIos;
   const [inputText, setInputText] = useState('');
   const [draftParse, setDraftParse] = useState<ReturnType<typeof buildDraftPreview> | null>(null);
   const [draftTriggerMessageId, setDraftTriggerMessageId] = useState<string | null>(null);
   const [draftPendingMessageId, setDraftPendingMessageId] = useState<string | null>(null);
-  const [suggestion, setSuggestion] = useState<{content: string, type: string, trigger: string} | null>(null);
+  const [suggestion, setSuggestion] = useState<SmartSuggestion | null>(null);
   const [dismissedSuggestionKey, setDismissedSuggestionKey] = useState(() => localStorage.getItem(DISMISSED_SMART_SUGGESTION_KEY) || '');
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [voiceErrorType, setVoiceErrorType] = useState<'permission' | 'unsupported' | null>(null);
+  const [voiceInputSupported, setVoiceInputSupported] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [showUndoConfirm, setShowUndoConfirm] = useState(false);
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
@@ -230,7 +231,7 @@ const Logger: React.FC<LoggerProps> = ({
   const [sidebarTab, setSidebarTab] = useState<'goals' | 'record-add'>('goals');
   const [composerMode, setComposerMode] = useState<'chat' | 'record-add'>('chat');
   const [imageDirectAnalyze, setImageDirectAnalyze] = useState(false);
-  const [showInlineKeyboard, setShowInlineKeyboard] = useState(prefersInlineKeyboard);
+  const [showInlineKeyboard, setShowInlineKeyboard] = useState(false);
   const [notice, setNotice] = useState<{ message: string; tone: 'success' | 'error' | 'info' } | null>(null);
   const [expandedPendingMessageId, setExpandedPendingMessageId] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(() => Date.now());
@@ -295,7 +296,7 @@ const Logger: React.FC<LoggerProps> = ({
   const isCurrentDraftExpired = draftParse ? isDraftExpired(draftParse, currentTime) : false;
   const currentDraftTimeValidation = draftParse?.parsed.intent === 'plan' ? draftParse.parsed.plan?.timeValidation : undefined;
   const activeSuggestionKey = getSuggestionKey(suggestion);
-  const shouldShowFloatingSuggestion = Boolean(suggestion) && activeSuggestionKey !== dismissedSuggestionKey && !isComposerOpen;
+  const shouldShowFloatingSuggestion = Boolean(suggestion?.content.trim()) && activeSuggestionKey !== dismissedSuggestionKey && !isComposerOpen;
 
   useEffect(() => {
     if (!sidebarOpenRequestKey) return;
@@ -320,9 +321,14 @@ const Logger: React.FC<LoggerProps> = ({
 
     if (cachedSuggestion && lastFetch && now - Number(lastFetch) < 4 * 60 * 60 * 1000) {
       try {
-        const parsedSuggestion = JSON.parse(cachedSuggestion);
-        setSuggestion(parsedSuggestion);
-        return;
+        const parsedSuggestion = normalizeSmartSuggestion(JSON.parse(cachedSuggestion));
+        if (parsedSuggestion) {
+          setSuggestion(parsedSuggestion);
+          return;
+        }
+
+        localStorage.removeItem('current_suggestion');
+        localStorage.removeItem('last_suggestion_fetch');
       } catch (error) {
         console.warn('Failed to read cached suggestion', error);
       }
@@ -331,12 +337,15 @@ const Logger: React.FC<LoggerProps> = ({
     let cancelled = false;
     const fetchSuggestion = async () => {
       try {
-        const latestLogs = logs.slice(0, 5).map((item) => item.rawText).join('\n');
-        const nextSuggestion = await getSmartSuggestions(latestLogs, i18n.language);
+        const nextSuggestion = await getSmartSuggestions(logs, i18n.language);
         if (!cancelled && nextSuggestion) {
           setSuggestion(nextSuggestion);
           localStorage.setItem('current_suggestion', JSON.stringify(nextSuggestion));
           localStorage.setItem('last_suggestion_fetch', String(now));
+        } else if (!cancelled) {
+          setSuggestion(null);
+          localStorage.removeItem('current_suggestion');
+          localStorage.removeItem('last_suggestion_fetch');
         }
       } catch (error) {
         console.warn('Failed to fetch smart suggestion', error);
@@ -361,7 +370,13 @@ const Logger: React.FC<LoggerProps> = ({
     if (isWeChat) return;
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+    if (!SpeechRecognition) {
+      recognitionRef.current = null;
+      setVoiceInputSupported(false);
+      return;
+    }
+
+    setVoiceInputSupported(true);
 
     const recognition = new SpeechRecognition();
     recognition.lang = i18n.language.startsWith('zh') ? 'zh-CN' : 'en-US';
@@ -389,14 +404,16 @@ const Logger: React.FC<LoggerProps> = ({
 
       voiceDraftRef.current = `${voiceTranscriptRef.current} ${interimChunk}`.trim();
       setInputText(voiceDraftRef.current);
-      setPermissionDenied(false);
+      setVoiceErrorType(null);
     };
 
     recognition.onerror = (event: any) => {
       shouldRestartListeningRef.current = false;
       shouldSubmitVoiceOnEndRef.current = false;
       if (event?.error === 'not-allowed' || event?.error === 'service-not-allowed') {
-        setPermissionDenied(true);
+        setVoiceErrorType('permission');
+      } else if (event?.error === 'language-not-supported') {
+        setVoiceErrorType('unsupported');
       }
       setIsListening(false);
     };
@@ -434,6 +451,7 @@ const Logger: React.FC<LoggerProps> = ({
     return () => {
       recognition.stop?.();
       recognitionRef.current = null;
+      setVoiceInputSupported(false);
     };
   }, [i18n.language, isWeChat]);
 
@@ -741,7 +759,7 @@ const Logger: React.FC<LoggerProps> = ({
 
     if (isListening || isProcessing) return;
 
-    setPermissionDenied(false);
+    setVoiceErrorType(null);
     setDraftParse(null);
     clearPersistedDraft();
     setShowInlineKeyboard(false);
@@ -753,7 +771,8 @@ const Logger: React.FC<LoggerProps> = ({
     if (isWeChat) {
       const wx = (window as any).wx;
       if (!wx) {
-        setPermissionDenied(true);
+        setVoiceErrorType('unsupported');
+        showNotice(t('logger.wechat_hint'), 'error');
         return;
       }
 
@@ -786,20 +805,28 @@ const Logger: React.FC<LoggerProps> = ({
         fail: (error: any) => {
           console.error('Start record failed', error);
           setIsListening(false);
-          setPermissionDenied(true);
+          setVoiceErrorType('permission');
         }
       });
+      return;
+    }
+
+    const recognition = recognitionRef.current;
+    if (!voiceInputSupported || !recognition || typeof recognition.start !== 'function') {
+      setVoiceErrorType('unsupported');
+      showNotice(t(isNativeIos ? 'logger.voice_ios_hint' : 'logger.voice_unsupported_hint'), 'error');
       return;
     }
 
     shouldRestartListeningRef.current = true;
     setIsListening(true);
     try {
-      recognitionRef.current?.start();
+      recognition.start();
     } catch (error) {
       console.error(error);
       shouldRestartListeningRef.current = false;
       setIsListening(false);
+      setVoiceErrorType('permission');
     }
   };
 
@@ -851,6 +878,12 @@ const Logger: React.FC<LoggerProps> = ({
 
   const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
     e?.preventDefault();
+    if (showInlineKeyboard) {
+      inlineInputRef.current?.blur();
+      if (isNativeIos) {
+        setShowInlineKeyboard(false);
+      }
+    }
     await analyzeTextInput(inputText);
   };
 
@@ -1252,7 +1285,7 @@ const Logger: React.FC<LoggerProps> = ({
     setCurrentLocation(undefined);
     setDraftParse(null);
     clearPersistedDraft();
-    setShowInlineKeyboard(prefersInlineKeyboard);
+    setShowInlineKeyboard(false);
     onCloseComposer();
   };
 
@@ -1809,7 +1842,7 @@ const Logger: React.FC<LoggerProps> = ({
 
       <div className="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] z-20 flex justify-center px-3">
         <div className="pointer-events-auto w-full max-w-[400px] px-1">
-          <div className={`border bg-white/92 px-3 py-3 backdrop-blur-xl ${prefersInlineKeyboard ? 'rounded-[2.05rem] border-white/90 shadow-[0_20px_44px_rgba(15,23,42,0.10)]' : 'rounded-[2rem] border-slate-200 shadow-2xl shadow-slate-200/70'}`}>
+          <div className="rounded-[2rem] border border-slate-200 bg-white/92 px-3 py-3 shadow-2xl shadow-slate-200/70 backdrop-blur-xl">
             {isListening && (
               <div className="mb-3 rounded-[1.4rem] border border-red-100 bg-red-50 px-4 py-3 shadow-sm">
                 <div className="flex items-center justify-between gap-3">
@@ -1893,7 +1926,7 @@ const Logger: React.FC<LoggerProps> = ({
                 type="button"
                 onClick={showInlineKeyboard ? handleSwitchToVoiceInput : handleOpenInlineKeyboard}
                 disabled={isListening}
-                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors ${isListening ? 'bg-red-500 text-white' : prefersInlineKeyboard ? 'bg-slate-900 text-white shadow-lg shadow-slate-200/80 hover:bg-slate-800' : 'bg-slate-900 text-white hover:bg-slate-800'}`}
+                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors ${isListening ? 'bg-red-500 text-white' : 'bg-slate-900 text-white hover:bg-slate-800'}`}
                 title={showInlineKeyboard ? t('logger.voice_input') : t('logger.keyboard_input')}
               >
                 {showInlineKeyboard ? (
@@ -2064,7 +2097,7 @@ const Logger: React.FC<LoggerProps> = ({
                       className={`flex-none p-2.5 rounded-xl transition-all ${
                         isListening 
                           ? 'bg-red-500 text-white animate-pulse shadow-lg shadow-red-100' 
-                          : permissionDenied 
+                          : voiceErrorType === 'permission' 
                             ? 'bg-red-50 text-red-400' 
                             : 'bg-white text-slate-500 hover:text-amber-700 hover:bg-white shadow-sm border border-slate-100'
                       }`}
@@ -2115,7 +2148,7 @@ const Logger: React.FC<LoggerProps> = ({
                       </button>
                     )}
 
-                    {permissionDenied && (
+                    {voiceErrorType && (
                       <div className="absolute top-full left-0 mt-2 w-max max-w-[200px] bg-red-50 text-red-500 text-xs p-2 rounded-lg border border-red-100 shadow-sm z-10 animate-in fade-in zoom-in-95 duration-200">
                         <p className="font-bold mb-1">{t('logger.voice_error_title')}</p>
                         {isWeChat ? (
@@ -2124,6 +2157,8 @@ const Logger: React.FC<LoggerProps> = ({
                           ) : (
                             <span>{t('logger.wechat_hint')}</span>
                           )
+                        ) : voiceErrorType === 'unsupported' ? (
+                          <span>{t(isNativeIos ? 'logger.voice_ios_hint' : 'logger.voice_unsupported_hint')}</span>
                         ) : (
                           <span>{t('logger.browser_voice_hint')}</span>
                         )}
