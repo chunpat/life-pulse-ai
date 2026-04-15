@@ -13,6 +13,10 @@ export interface SmartSuggestion {
 export interface ParseContextMessage {
   role: 'user' | 'assistant';
   content: string;
+  messageType?: 'text' | 'confirmation';
+  metadata?: {
+    kind?: string;
+  };
 }
 
 export const normalizeSmartSuggestion = (payload: unknown): SmartSuggestion | null => {
@@ -62,12 +66,13 @@ export const parseLifeLog = async (
   text: string,
   lang?: string,
   mode: 'auto' | 'log' = 'auto',
-  context: ParseContextMessage[] = []
+  context: ParseContextMessage[] = [],
+  contextSummary: string = ''
 ): Promise<ParseResult> => {
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   return apiClient(`${API_BASE_URL}/parse`, {
     method: 'POST',
-    body: { text, lang, timezone, mode, context }
+    body: { text, lang, timezone, mode, context, contextSummary }
   });
 };
 

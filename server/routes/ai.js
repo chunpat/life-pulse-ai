@@ -107,6 +107,87 @@ function buildDefaultAssistantReply(text, isEn) {
     : `收到。你可以继续直接和我聊，我也可以帮你把这句话整理成计划、记录或记账：${text}`;
 }
 
+function normalizeContextText(content, maxChars = 160) {
+  const normalized = String(content || '').replace(/\s+/g, ' ').trim();
+  if (!normalized) return '';
+  if (normalized.length <= maxChars) return normalized;
+  return `${normalized.slice(0, maxChars - 1).trimEnd()}…`;
+}
+
+function isContextMessageEligible(item) {
+  if (!item || (item.role !== 'user' && item.role !== 'assistant')) return false;
+  if (typeof item.content !== 'string' || !item.content.trim()) return false;
+  if (item.messageType === 'confirmation') return false;
+
+  if (item.role === 'assistant') {
+    const kind = typeof item.metadata?.kind === 'string' ? item.metadata.kind : null;
+    if (kind === 'pending_preview') return false;
+    if (kind && kind !== 'chat') return false;
+  }
+
+  return true;
+}
+
+function buildConversationSummary(context, maxItems = 4, maxChars = 320) {
+  const mergedMessages = context.reduce((accumulator, item) => {
+    const normalizedContent = normalizeContextText(item.content, 90);
+    if (!normalizedContent) return accumulator;
+
+    const previousMessage = accumulator[accumulator.length - 1];
+    if (previousMessage && previousMessage.role === item.role) {
+      previousMessage.content = normalizeContextText(`${previousMessage.content} / ${normalizedContent}`, 140);
+      return accumulator;
+    }
+
+    accumulator.push({ role: item.role, content: normalizedContent });
+    return accumulator;
+  }, []);
+
+  const summary = mergedMessages
+    .slice(-maxItems)
+    .map((item) => `${item.role === 'user' ? 'user' : 'assistant'}: ${item.content}`)
+    .join(' | ');
+
+  if (summary.length <= maxChars) return summary;
+  return `${summary.slice(0, maxChars - 1).trimEnd()}…`;
+}
+
+function buildRecentConversationArtifacts(context, maxUserTurns = 3) {
+  if (!Array.isArray(context)) {
+    return {
+      recentContext: [],
+      olderSummary: ''
+    };
+  }
+
+  const eligibleContext = context
+    .filter(isContextMessageEligible)
+    .map((item) => ({
+      role: item.role,
+      content: normalizeContextText(item.content)
+    }));
+
+  let userTurns = 0;
+  let startIndex = 0;
+
+  for (let index = eligibleContext.length - 1; index >= 0; index -= 1) {
+    if (eligibleContext[index].role !== 'user') {
+      continue;
+    }
+
+    userTurns += 1;
+    startIndex = index;
+    if (userTurns >= maxUserTurns) {
+      break;
+    }
+  }
+
+  return {
+    recentContext: eligibleContext.slice(startIndex),
+    olderSummary: buildConversationSummary(eligibleContext.slice(0, startIndex))
+  };
+}
+
 function shouldAcceptPlanResult(text, parsedPlan) {
   if (!parsedPlan) return false;
 
@@ -442,7 +523,7 @@ function attachPlanTimeValidation(plan, timeZone, isEn) {
 // 解析生活日志 - 允许游客访问，前端负责次数限制
 router.post('/parse', async (req, res) => {
   try {
-    const { text, lang, timezone, mode = 'auto', context = [] } = req.body;
+    const { text, lang, timezone, mode = 'auto', context = [], contextSummary = '' } = req.body;
     if (!text) return res.status(400).json({ message: '请提供文本内容' });
 
     if (!apiKey) {
@@ -460,13 +541,8 @@ router.post('/parse', async (req, res) => {
     const resolvedTimezone = typeof timezone === 'string' && timezone.trim() ? timezone.trim() : 'Asia/Shanghai';
     const planHint = mode === 'log' ? false : isLikelyPlanText(text);
     const chatHint = isLikelyChatText(text);
-    const recentContext = Array.isArray(context)
-      ? context
-          .filter((item) => item && (item.role === 'user' || item.role === 'assistant') && typeof item.content === 'string')
-          .slice(-6)
-          .map((item) => ({ role: item.role, content: item.content.trim() }))
-          .filter((item) => item.content)
-      : [];
+    const { recentContext, olderSummary } = buildRecentConversationArtifacts(context, 3);
+    const sanitizedContextSummary = normalizeContextText(contextSummary, 320) || olderSummary;
     const contextPrompt = recentContext.length > 0
       ? recentContext.map((item, index) => `${index + 1}. ${item.role === 'user' ? 'user' : 'assistant'}: ${item.content}`).join('\n')
       : '';
@@ -567,6 +643,12 @@ Rules:
           role: "system",
           content: `${isEn ? systemPromptEn : systemPromptZh}\n\nHeuristic hint: ${planHint ? 'This input contains strong future scheduling or reminder signals. Prefer intent=plan unless clearly contradicted.' : chatHint ? 'This input looks like casual conversation or a direct question to the assistant. Prefer intent=chat unless there is explicit structured log, finance, or schedule intent.' : 'No strong scheduling intent detected. Use chat for conversation, log for life records, finance for money statements, and only use plan when there is explicit reminder or schedule intent.'}`
         },
+        ...(sanitizedContextSummary ? [{
+          role: "system",
+          content: isEn
+            ? `Earlier conversation summary. Use it only to resolve references and maintain continuity, not as the latest user request.\n${sanitizedContextSummary}`
+            : `更早对话摘要。只用它来理解上下文指代和连续性，不要把它当成最新用户请求。\n${sanitizedContextSummary}`
+        }] : []),
         ...(contextPrompt ? [{
           role: "system",
           content: isEn

@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { parseLifeLog, getSmartSuggestions, normalizeSmartSuggestion, SmartSuggestion } from '../services/qwenService';
+import { parseLifeLog, getSmartSuggestions, normalizeSmartSuggestion, ParseContextMessage, SmartSuggestion } from '../services/qwenService';
 import { createFinanceRecord, deleteFinanceRecordsByLogId } from '../services/financeService';
 import { storageService } from '../services/storageService';
 import { runtimeConfig } from '../services/runtimeConfig';
@@ -70,6 +70,84 @@ const focusInlineInputFromUserGesture = (
 const getSuggestionKey = (suggestion: SmartSuggestion | null) => {
   if (!suggestion?.content.trim()) return '';
   return `${suggestion.type}::${suggestion.trigger}::${suggestion.content}`;
+};
+
+const normalizeContextContent = (content: string, maxChars = 160) => {
+  const normalized = content.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= maxChars) return normalized;
+  return `${normalized.slice(0, maxChars - 1).trimEnd()}…`;
+};
+
+const isChatContextMessage = (message: ChatMessage) => {
+  if (typeof message.content !== 'string' || !message.content.trim()) return false;
+  if (message.messageType === 'confirmation') return false;
+  if (message.role === 'assistant') {
+    const kind = typeof message.metadata?.kind === 'string' ? message.metadata.kind : null;
+    if (kind === 'pending_preview') return false;
+    if (kind && kind !== 'chat') return false;
+  }
+  return true;
+};
+
+const buildContextSummary = (messages: ParseContextMessage[], maxItems = 4, maxChars = 320) => {
+  const mergedMessages = messages.reduce<Array<{ role: ParseContextMessage['role']; content: string }>>((accumulator, message) => {
+    const normalizedContent = normalizeContextContent(message.content, 90);
+    if (!normalizedContent) return accumulator;
+
+    const previousMessage = accumulator[accumulator.length - 1];
+    if (previousMessage?.role === message.role) {
+      previousMessage.content = normalizeContextContent(`${previousMessage.content} / ${normalizedContent}`, 140);
+      return accumulator;
+    }
+
+    accumulator.push({ role: message.role, content: normalizedContent });
+    return accumulator;
+  }, []);
+
+  const summary = mergedMessages
+    .slice(-maxItems)
+    .map((message) => `${message.role === 'user' ? '用户' : '助理'}: ${message.content}`)
+    .join(' | ');
+
+  if (summary.length <= maxChars) return summary;
+  return `${summary.slice(0, maxChars - 1).trimEnd()}…`;
+};
+
+const buildRecentChatContextArtifacts = (messages: ChatMessage[], maxUserTurns = 3) => {
+  const eligibleMessages = messages
+    .filter(isChatContextMessage)
+    .map<ParseContextMessage>((message) => {
+      const kind = typeof message.metadata?.kind === 'string' ? message.metadata.kind : undefined;
+      return {
+        role: message.role,
+        content: normalizeContextContent(message.content),
+        messageType: message.messageType,
+        metadata: kind ? { kind } : undefined
+      };
+    });
+
+  let userTurns = 0;
+  let startIndex = 0;
+
+  for (let index = eligibleMessages.length - 1; index >= 0; index -= 1) {
+    if (eligibleMessages[index].role !== 'user') {
+      continue;
+    }
+
+    userTurns += 1;
+    startIndex = index;
+    if (userTurns >= maxUserTurns) {
+      break;
+    }
+  }
+
+  const recentContext = eligibleMessages.slice(startIndex);
+  const olderContext = eligibleMessages.slice(0, startIndex);
+
+  return {
+    recentContext,
+    contextSummary: buildContextSummary(olderContext)
+  };
 };
 
 function persistUnconfirmedDraft(draft: NonNullable<ReturnType<typeof buildDraftPreview>>) {
@@ -670,14 +748,13 @@ const Logger: React.FC<LoggerProps> = ({
     });
 
     try {
+      const { recentContext, contextSummary } = buildRecentChatContextArtifacts(recentChatMessages, 3);
       const parsed = await parseLifeLog(
         normalizedText,
         i18n.language,
         'auto',
-        recentChatMessages.slice(-6).map((message) => ({
-          role: message.role,
-          content: message.content
-        }))
+        recentContext,
+        contextSummary
       );
 
       if (parsed.intent === 'chat') {
