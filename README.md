@@ -2,6 +2,19 @@
 
 掌控生活是 LifePulse AI 的中文产品名。它把生活记录、财务记账和计划安排合并到一个对话式入口里，让你用一句话就能完成记录、识别和整理。
 
+## AI 协作说明
+
+- 文档索引：`docs/README.md`
+- 通用代理说明：`AGENTS.md`
+- Copilot 专用详细说明：`.github/copilot-instructions.md`
+- 独立开发指南：`docs/ai-dev-guide.md`
+- 功能改动清单：`docs/feature-change-checklist.md`
+- 目标 / 积分 / 徽章规则：`docs/goals-rewards-domain-guide.md`
+- 计划 / iOS 同步规则：`docs/plans-ios-sync-domain-guide.md`
+- 登录 / 鉴权 / 本地同步规则：`docs/auth-and-sync-domain-guide.md`
+- AI 分流 / 日志解析规则：`docs/ai-routing-log-domain-guide.md`
+- 接口变更模板：`docs/interface-change-template.md`
+
 ## 🌟 核心功能
 
 - **对话式语音 / 文本入口**: 像聊天一样说一句，AI 会自动识别这是生活记录、财务记账，还是未来计划。
