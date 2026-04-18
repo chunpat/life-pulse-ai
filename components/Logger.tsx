@@ -5,7 +5,7 @@ import { parseLifeLog, getSmartSuggestions, normalizeSmartSuggestion, ParseConte
 import { createFinanceRecord, deleteFinanceRecordsByLogId } from '../services/financeService';
 import { storageService } from '../services/storageService';
 import { runtimeConfig } from '../services/runtimeConfig';
-import { ChatMessage, Goal, GoalCreateInput, LogEntry, ParseResult, Plan, PlanCreateInput, PlanParseResult, RewardProfile } from '../types';
+import { ChatAttachment, ChatMessage, Goal, GoalCreateInput, LogEntry, ParseResult, Plan, PlanCreateInput, PlanParseResult, RewardProfile } from '../types';
 import { buildSafeAreaInsetStyle, buildSafeAreaPaddingStyle } from '../utils/safeArea';
 import { formatMessageTime, shouldShowTimeLabel } from '../utils/formatMessageTime';
 import GoalPlanner from './GoalPlanner';
@@ -78,6 +78,38 @@ const normalizeContextContent = (content: string, maxChars = 160) => {
   return `${normalized.slice(0, maxChars - 1).trimEnd()}…`;
 };
 
+const normalizeChatAttachments = (value: unknown): ChatAttachment[] => {
+  if (!Array.isArray(value)) return [];
+
+  const attachments: Array<ChatAttachment | null> = value
+    .filter((item) => item && typeof item === 'object')
+    .map((item) => {
+      const attachment = item as Partial<ChatAttachment>;
+      if (attachment.type !== 'image' || typeof attachment.url !== 'string' || !attachment.url.trim()) {
+        return null;
+      }
+
+      return {
+        type: 'image' as const,
+        url: attachment.url.trim(),
+        name: typeof attachment.name === 'string' && attachment.name.trim() ? attachment.name.trim() : undefined,
+        mimeType: typeof attachment.mimeType === 'string' && attachment.mimeType.trim() ? attachment.mimeType.trim() : undefined
+      };
+    });
+
+  return attachments.filter((attachment): attachment is ChatAttachment => attachment !== null);
+};
+
+const getMessageAttachments = (message: ChatMessage): ChatAttachment[] => {
+  const metadata = message.metadata as { attachments?: unknown } | undefined;
+  return normalizeChatAttachments(metadata?.attachments);
+};
+
+const buildAttachmentContextSuffix = (attachments: ChatAttachment[]) => {
+  if (!attachments.length) return '';
+  return ` [附带${attachments.length}张图片]`;
+};
+
 const isChatContextMessage = (message: ChatMessage) => {
   if (typeof message.content !== 'string' || !message.content.trim()) return false;
   if (message.messageType === 'confirmation') return false;
@@ -117,12 +149,18 @@ const buildRecentChatContextArtifacts = (messages: ChatMessage[], maxUserTurns =
   const eligibleMessages = messages
     .filter(isChatContextMessage)
     .map<ParseContextMessage>((message) => {
+      const attachments = getMessageAttachments(message);
       const kind = typeof message.metadata?.kind === 'string' ? message.metadata.kind : undefined;
       return {
         role: message.role,
-        content: normalizeContextContent(message.content),
+        content: normalizeContextContent(`${message.content}${buildAttachmentContextSuffix(attachments)}`),
         messageType: message.messageType,
-        metadata: kind ? { kind } : undefined
+        metadata: kind || attachments.length
+          ? {
+              ...(kind ? { kind } : {}),
+              ...(attachments.length ? { attachments } : {})
+            }
+          : undefined
       };
     });
 
@@ -285,6 +323,7 @@ const Logger: React.FC<LoggerProps> = ({
 }) => {
   const { t, i18n } = useTranslation();
   const isNativeIos = runtimeConfig.isNativeIos;
+  const isEnglish = !i18n.language.startsWith('zh');
   const [inputText, setInputText] = useState('');
   const [draftParse, setDraftParse] = useState<ReturnType<typeof buildDraftPreview> | null>(null);
   const [draftTriggerMessageId, setDraftTriggerMessageId] = useState<string | null>(null);
@@ -297,7 +336,7 @@ const Logger: React.FC<LoggerProps> = ({
   const [voiceInputSupported, setVoiceInputSupported] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [showUndoConfirm, setShowUndoConfirm] = useState(false);
-  const [uploadedImages, setUploadedImages] = useState<string[]>([]);
+  const [uploadedImages, setUploadedImages] = useState<ChatAttachment[]>([]);
   const [currentLocation, setCurrentLocation] = useState<LogEntry['location']>(undefined);
   const [isUploading, setIsUploading] = useState(false);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
@@ -308,7 +347,6 @@ const Logger: React.FC<LoggerProps> = ({
   const [showTimelineDrawer, setShowTimelineDrawer] = useState(false);
   const [sidebarTab, setSidebarTab] = useState<'goals' | 'record-add'>('goals');
   const [composerMode, setComposerMode] = useState<'chat' | 'record-add'>('chat');
-  const [imageDirectAnalyze, setImageDirectAnalyze] = useState(false);
   const [showInlineKeyboard, setShowInlineKeyboard] = useState(false);
   const [notice, setNotice] = useState<{ message: string; tone: 'success' | 'error' | 'info' } | null>(null);
   const [expandedPendingMessageId, setExpandedPendingMessageId] = useState<string | null>(null);
@@ -375,6 +413,7 @@ const Logger: React.FC<LoggerProps> = ({
   const currentDraftTimeValidation = draftParse?.parsed.intent === 'plan' ? draftParse.parsed.plan?.timeValidation : undefined;
   const activeSuggestionKey = getSuggestionKey(suggestion);
   const shouldShowFloatingSuggestion = Boolean(suggestion?.content.trim()) && activeSuggestionKey !== dismissedSuggestionKey && !isComposerOpen;
+  const inlineComposerVisible = showInlineKeyboard || uploadedImages.length > 0;
 
   useEffect(() => {
     if (!sidebarOpenRequestKey) return;
@@ -699,7 +738,8 @@ const Logger: React.FC<LoggerProps> = ({
 
   const analyzeTextInput = async (text: string, options?: { openComposer?: boolean }) => {
     const normalizedText = text.trim();
-    if (!normalizedText || isProcessing) return;
+    const pendingAttachments = [...uploadedImages];
+    if ((!normalizedText && pendingAttachments.length === 0) || isProcessing) return;
 
     if (isGuest && logs.length >= 3) {
       setShowLimitModal(true);
@@ -709,6 +749,11 @@ const Logger: React.FC<LoggerProps> = ({
     if (options?.openComposer) {
       onOpenComposer();
     }
+
+    const userMessageContent = normalizedText || t('logger.image_only_message', { count: pendingAttachments.length });
+    const parseRequestText = normalizedText || (isEnglish
+      ? `Please analyze the attached ${pendingAttachments.length} image${pendingAttachments.length > 1 ? 's' : ''} and continue the conversation.`
+      : `请结合我发送的这 ${pendingAttachments.length} 张图片继续理解和回复。`);
 
     // 如果有未确认的预览，转成待处理消息保留在对话中
       if (draftParse) {
@@ -739,22 +784,24 @@ const Logger: React.FC<LoggerProps> = ({
     void onCreateChatMessage({
       id: userMsgId,
       role: 'user',
-      content: normalizedText,
+      content: userMessageContent,
       messageType: 'text',
       timestamp: Date.now(),
       metadata: {
-        source: options?.openComposer ? 'composer' : 'chat'
+        source: options?.openComposer ? 'composer' : 'chat',
+        ...(pendingAttachments.length ? { attachments: pendingAttachments } : {})
       }
     });
 
     try {
       const { recentContext, contextSummary } = buildRecentChatContextArtifacts(recentChatMessages, 3);
       const parsed = await parseLifeLog(
-        normalizedText,
+        parseRequestText,
         i18n.language,
         'auto',
         recentContext,
-        contextSummary
+        contextSummary,
+        pendingAttachments
       );
 
       if (parsed.intent === 'chat') {
@@ -770,10 +817,11 @@ const Logger: React.FC<LoggerProps> = ({
         });
         setInputText('');
         setDraftParse(null);
+        setUploadedImages([]);
         return;
       }
 
-      const preview = buildDraftPreview(parsed, normalizedText);
+      const preview = buildDraftPreview(parsed, userMessageContent);
       persistUnconfirmedDraft(preview);
       setDraftParse(preview);
       setDraftTriggerMessageId(userMsgId);
@@ -786,14 +834,28 @@ const Logger: React.FC<LoggerProps> = ({
   };
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(event.target.files ?? []) as File[];
+    if (files.length === 0) return;
+
+    if (isGuest) {
+      showNotice(t('logger.image_upload_requires_login', '登录后才能上传图片'), 'error');
+      event.target.value = '';
+      return;
+    }
 
     setIsUploading(true);
     try {
-      const imageUrl = await storageService.uploadImage(file);
-      setUploadedImages((prev) => [...prev, imageUrl]);
-      setImageDirectAnalyze(false);
+      const attachments = await Promise.all(files.map(async (file) => {
+        const imageUrl = await storageService.uploadImage(file);
+        return {
+          type: 'image' as const,
+          url: imageUrl,
+          name: file.name,
+          mimeType: file.type || undefined
+        };
+      }));
+      setUploadedImages((prev) => [...prev, ...attachments]);
+      setShowInlineKeyboard(true);
     } catch (error) {
       console.error(error);
       showNotice(t('logger.image_upload_failed', '图片上传失败，请重试'), 'error');
@@ -1003,6 +1065,11 @@ const Logger: React.FC<LoggerProps> = ({
   };
 
   const handleSwitchToVoiceInput = () => {
+    if (uploadedImages.length > 0) {
+      showNotice(t('logger.image_voice_blocked', '有待发送图片时，请直接输入文字或点击发送'), 'info');
+      return;
+    }
+
     inlineInputRef.current?.blur();
     textareaRef.current?.blur();
     setShowInlineKeyboard(false);
@@ -1061,7 +1128,7 @@ const Logger: React.FC<LoggerProps> = ({
           metadata: {
             originalText: draftParse.originalText,
             location: currentLocation || null,
-            images: uploadedImages
+            images: uploadedImages.map((attachment) => attachment.url)
           }
         });
 
@@ -1117,7 +1184,7 @@ const Logger: React.FC<LoggerProps> = ({
         mood: parsed.mood || '平静',
         importance: parsed.importance || 3,
         location: currentLocation,
-        images: uploadedImages
+        images: uploadedImages.map((attachment) => attachment.url)
       };
 
       await onAddLog(newEntry);
@@ -1340,15 +1407,6 @@ const Logger: React.FC<LoggerProps> = ({
     }
   };
 
-  const handleImageFlowAction = async () => {
-    if (imageDirectAnalyze) {
-      await analyzeTextInput(t('logger.image_direct_prompt'));
-      return;
-    }
-
-    handleQuickCompose('');
-  };
-
   const handleCloseComposer = () => {
     if (isProcessing) return;
     setDraftParse(null);
@@ -1379,7 +1437,15 @@ const Logger: React.FC<LoggerProps> = ({
         onTouchStart={handleTimelineTouchStart}
         onTouchEnd={handleTimelineTouchEnd}
       >
-      <input type="file" accept="image/*" capture="environment" className="hidden" ref={fileInputRef} onChange={handleImageUpload} />
+      <input
+        type="file"
+        accept="image/*"
+        capture={isNativeIos ? undefined : 'environment'}
+        multiple
+        className="hidden"
+        ref={fileInputRef}
+        onChange={handleImageUpload}
+      />
 
       <div className="flex-1 px-4 pb-44 pt-2 sm:pb-40">
         <div className="space-y-4">
@@ -1442,6 +1508,7 @@ const Logger: React.FC<LoggerProps> = ({
               const prevMessage = index > 0 ? recentChatMessages[index - 1] : null;
               const showTimeLabel = index === 0 ||
                 (prevMessage && shouldShowTimeLabel(prevMessage.timestamp, message.timestamp));
+              const attachments = getMessageAttachments(message);
 
               return (
                 <React.Fragment key={message.id}>
@@ -1454,14 +1521,25 @@ const Logger: React.FC<LoggerProps> = ({
                     <div className={message.role === 'user'
                       ? 'max-w-[82%] rounded-[1.6rem] rounded-br-md bg-amber-400 px-4 py-3 text-left text-sm font-medium leading-relaxed text-slate-950 shadow-sm'
                       : 'max-w-[86%] rounded-[1.6rem] rounded-bl-md bg-[#fffaf0] px-4 py-3 text-sm leading-relaxed text-slate-700 shadow-sm ring-1 ring-amber-100'}>
+                      {attachments.length > 0 && (
+                        <div className={`grid grid-cols-2 gap-2 ${message.content ? 'mb-3' : ''}`}>
+                          {attachments.map((attachment, attachmentIndex) => (
+                            <div key={`${attachment.url}-${attachmentIndex}`} className="overflow-hidden rounded-2xl bg-white/70 ring-1 ring-black/5">
+                              <img src={attachment.url} alt={attachment.name || 'Attachment'} className="h-28 w-full object-cover" />
+                            </div>
+                          ))}
+                        </div>
+                      )}
                       {message.role === 'assistant' && message.messageType === 'confirmation' && (
                         <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-amber-600">
                           {t('logger.thread_saved_label')}
                         </div>
                       )}
-                      <div className={message.role === 'assistant' && message.messageType === 'confirmation' ? 'mt-1' : ''}>
-                        {message.content}
-                      </div>
+                      {message.content && (
+                        <div className={message.role === 'assistant' && message.messageType === 'confirmation' ? 'mt-1' : ''}>
+                          {message.content}
+                        </div>
+                      )}
                       {message.role === 'user' && latestUndoableUserMessageId === message.id && (
                         <div className="mt-3 flex items-center justify-end gap-2">
                           <span className="text-[11px] text-slate-800/70">
@@ -1647,52 +1725,27 @@ const Logger: React.FC<LoggerProps> = ({
               </div>
             )}
             {uploadedImages.length > 0 && (
-              <>
-                <div className="flex justify-end">
-                  <div className="max-w-[86%] rounded-[1.6rem] rounded-br-md bg-white px-3 py-3 shadow-sm ring-1 ring-slate-200">
-                    <div className="grid grid-cols-3 gap-2">
-                      {uploadedImages.map((url, idx) => (
-                        <div key={idx} className="relative overflow-hidden rounded-xl bg-slate-100">
-                          <img src={url} alt="Uploaded" className="h-24 w-full object-cover" />
-                          <button
-                            type="button"
-                            onClick={() => setUploadedImages((prev) => prev.filter((_, imageIndex) => imageIndex !== idx))}
-                            className="absolute right-1 top-1 rounded-full bg-black/55 p-1 text-white"
-                          >
-                            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                          </button>
-                        </div>
-                      ))}
-                    </div>
+              <div className="flex justify-end">
+                <div className="max-w-[86%] rounded-[1.6rem] rounded-br-md bg-white px-3 py-3 shadow-sm ring-1 ring-slate-200">
+                  <div className="grid grid-cols-3 gap-2">
+                    {uploadedImages.map((attachment, idx) => (
+                      <div key={`${attachment.url}-${idx}`} className="relative overflow-hidden rounded-xl bg-slate-100">
+                        <img src={attachment.url} alt={attachment.name || 'Uploaded'} className="h-24 w-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setUploadedImages((prev) => prev.filter((_, imageIndex) => imageIndex !== idx))}
+                          className="absolute right-1 top-1 rounded-full bg-black/55 p-1 text-white"
+                        >
+                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                      </div>
+                    ))}
                   </div>
+                  <p className="mt-3 text-xs leading-relaxed text-slate-500">
+                    {t('logger.image_attachment_hint', { count: uploadedImages.length })}
+                  </p>
                 </div>
-
-                <div className="flex justify-start">
-                  <div className="max-w-[88%] rounded-[1.6rem] rounded-bl-md bg-[#fffaf0] px-4 py-3 text-sm text-slate-700 shadow-sm ring-1 ring-amber-100">
-                    <label className="flex items-center gap-2 font-medium text-slate-700">
-                      <input
-                        type="checkbox"
-                        checked={imageDirectAnalyze}
-                        onChange={(event) => setImageDirectAnalyze(event.target.checked)}
-                        className="h-4 w-4 rounded border-slate-300 text-amber-500 focus:ring-amber-300"
-                      />
-                      {t('logger.image_direct_toggle')}
-                    </label>
-                    <p className="mt-2 text-xs leading-relaxed text-slate-500">
-                      {imageDirectAnalyze ? t('logger.image_direct_hint') : t('logger.image_describe_hint')}
-                    </p>
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => void handleImageFlowAction()}
-                        className="rounded-full bg-slate-900 px-4 py-2 text-sm font-bold text-white"
-                      >
-                        {imageDirectAnalyze ? t('logger.image_direct_action') : t('logger.image_describe_action')}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </>
+              </div>
             )}
 
             <div ref={chatBottomRef} className="h-px scroll-mb-28" />
@@ -1948,7 +2001,7 @@ const Logger: React.FC<LoggerProps> = ({
               >
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 7h4l2-2h6l2 2h4v11a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 16a3 3 0 100-6 3 3 0 000 6z" /></svg>
               </button>
-              {showInlineKeyboard ? (
+              {inlineComposerVisible ? (
                 <form
                   onSubmit={handleSubmit}
                   onClick={handleInlineInputContainerPress}
@@ -1972,7 +2025,7 @@ const Logger: React.FC<LoggerProps> = ({
                   />
                   <button
                     type="submit"
-                    disabled={!inputText.trim() || isProcessing}
+                    disabled={(!inputText.trim() && uploadedImages.length === 0) || isProcessing}
                     className="rounded-full bg-amber-500 p-2.5 text-slate-950 transition-colors hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {isProcessing ? (
@@ -2001,12 +2054,12 @@ const Logger: React.FC<LoggerProps> = ({
               )}
               <button
                 type="button"
-                onClick={showInlineKeyboard ? handleSwitchToVoiceInput : handleOpenInlineKeyboard}
+                onClick={inlineComposerVisible ? handleSwitchToVoiceInput : handleOpenInlineKeyboard}
                 disabled={isListening}
                 className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors ${isListening ? 'bg-red-500 text-white' : 'bg-slate-900 text-white hover:bg-slate-800'}`}
-                title={showInlineKeyboard ? t('logger.voice_input') : t('logger.keyboard_input')}
+                title={inlineComposerVisible ? t('logger.voice_input') : t('logger.keyboard_input')}
               >
-                {showInlineKeyboard ? (
+                {inlineComposerVisible ? (
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 18.5a3.5 3.5 0 003.5-3.5V8a3.5 3.5 0 10-7 0v7a3.5 3.5 0 003.5 3.5z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11.5a7 7 0 01-14 0" />
@@ -2138,11 +2191,11 @@ const Logger: React.FC<LoggerProps> = ({
                   </div>
                 )}
 
-                {(uploadedImages.length > 0 || currentLocation) && composerMode === 'record-add' && (
+                {(uploadedImages.length > 0 || (currentLocation && composerMode === 'record-add')) && (
                   <div className="flex flex-wrap gap-2 mb-4 px-1">
-                    {uploadedImages.map((url, idx) => (
+                    {uploadedImages.map((attachment, idx) => (
                       <div key={idx} className="relative group w-14 h-14 rounded-xl overflow-hidden border border-slate-100 shadow-sm">
-                        <img src={url} alt="Uploaded" className="w-full h-full object-cover" />
+                        <img src={attachment.url} alt={attachment.name || 'Uploaded'} className="w-full h-full object-cover" />
                         <button
                           type="button"
                           onClick={() => setUploadedImages(prev => prev.filter((_, i) => i !== idx))}

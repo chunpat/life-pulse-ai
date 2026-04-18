@@ -1,4 +1,4 @@
-import { LogEntry, ParseResult } from '../types';
+import { ChatAttachment, LogEntry, ParseResult } from '../types';
 import { apiClient } from './apiClient';
 
 const API_BASE_URL = '/api/ai';
@@ -16,6 +16,7 @@ export interface ParseContextMessage {
   messageType?: 'text' | 'confirmation';
   metadata?: {
     kind?: string;
+    attachments?: ChatAttachment[];
   };
 }
 
@@ -67,12 +68,13 @@ export const parseLifeLog = async (
   lang?: string,
   mode: 'auto' | 'log' = 'auto',
   context: ParseContextMessage[] = [],
-  contextSummary: string = ''
+  contextSummary: string = '',
+  attachments: ChatAttachment[] = []
 ): Promise<ParseResult> => {
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   return apiClient(`${API_BASE_URL}/parse`, {
     method: 'POST',
-    body: { text, lang, timezone, mode, context, contextSummary }
+    body: { text, lang, timezone, mode, context, contextSummary, attachments }
   });
 };
 

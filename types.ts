@@ -14,6 +14,13 @@ export type PlanSyncState = 'local-only' | 'pending-sync' | 'synced' | 'conflict
 export type ChatMessageRole = 'user' | 'assistant';
 export type ChatMessageType = 'text' | 'confirmation';
 
+export interface ChatAttachment {
+  type: 'image';
+  url: string;
+  name?: string;
+  mimeType?: string;
+}
+
 export interface LogGoalCheckin {
   goalId: string;
   goalLabel: string;

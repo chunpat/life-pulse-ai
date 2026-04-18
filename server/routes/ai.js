@@ -6,6 +6,7 @@ const authenticateToken = require('../middleware/auth');
 const apiKey = process.env.DASHSCOPE_API_KEY;
 const modelName = process.env.QWEN_MODEL || 'qwen-plus';
 const enableThinking = String(process.env.QWEN_ENABLE_THINKING || 'false').toLowerCase() === 'true';
+const enableMultimodal = String(process.env.QWEN_ENABLE_MULTIMODAL || 'true').toLowerCase() !== 'false';
 
 const THINKING_TOGGLE_MODELS = [
   'qwen3.5-plus',
@@ -114,6 +115,59 @@ function normalizeContextText(content, maxChars = 160) {
   return `${normalized.slice(0, maxChars - 1).trimEnd()}…`;
 }
 
+function sanitizeImageAttachments(attachments) {
+  if (!Array.isArray(attachments)) {
+    return [];
+  }
+
+  return attachments
+    .filter((item) => item && item.type === 'image' && typeof item.url === 'string' && item.url.trim())
+    .map((item) => ({
+      type: 'image',
+      url: item.url.trim(),
+      name: typeof item.name === 'string' && item.name.trim() ? item.name.trim() : undefined,
+      mimeType: typeof item.mimeType === 'string' && item.mimeType.trim() ? item.mimeType.trim() : undefined
+    }));
+}
+
+function buildAttachmentNote(attachments, isEn = false) {
+  const count = sanitizeImageAttachments(attachments).length;
+  if (!count) {
+    return '';
+  }
+
+  return isEn ? ` [${count} image attachment${count > 1 ? 's' : ''}]` : ` [附带${count}张图片]`;
+}
+
+function buildParseUserContent(text, attachments, isEn) {
+  const sanitizedAttachments = enableMultimodal ? sanitizeImageAttachments(attachments) : [];
+  const normalizedText = String(text || '').trim();
+  const promptText = sanitizedAttachments.length > 0
+    ? (isEn
+        ? `Please parse the user's latest input into structured JSON. Consider both the text and the attached image${sanitizedAttachments.length > 1 ? 's' : ''}. Latest text: "${normalizedText}"`
+        : `请结合用户这次发送的文字和附带图片，一起解析成结构化 JSON。最新输入："${normalizedText}"`)
+    : (isEn
+      ? `Please parse the following input into structured JSON: "${normalizedText}"`
+      : `请将以下输入解析为结构化 JSON： "${normalizedText}"`);
+
+  if (!sanitizedAttachments.length) {
+    return promptText;
+  }
+
+  return [
+    {
+      type: 'text',
+      text: promptText
+    },
+    ...sanitizedAttachments.map((attachment) => ({
+      type: 'image_url',
+      image_url: {
+        url: attachment.url
+      }
+    }))
+  ];
+}
+
 function isContextMessageEligible(item) {
   if (!item || (item.role !== 'user' && item.role !== 'assistant')) return false;
   if (typeof item.content !== 'string' || !item.content.trim()) return false;
@@ -164,7 +218,7 @@ function buildRecentConversationArtifacts(context, maxUserTurns = 3) {
     .filter(isContextMessageEligible)
     .map((item) => ({
       role: item.role,
-      content: normalizeContextText(item.content)
+      content: normalizeContextText(`${item.content}${buildAttachmentNote(item.metadata?.attachments)}`)
     }));
 
   let userTurns = 0;
@@ -523,7 +577,7 @@ function attachPlanTimeValidation(plan, timeZone, isEn) {
 // 解析生活日志 - 允许游客访问，前端负责次数限制
 router.post('/parse', async (req, res) => {
   try {
-    const { text, lang, timezone, mode = 'auto', context = [], contextSummary = '' } = req.body;
+    const { text, lang, timezone, mode = 'auto', context = [], contextSummary = '', attachments = [] } = req.body;
     if (!text) return res.status(400).json({ message: '请提供文本内容' });
 
     if (!apiKey) {
@@ -541,6 +595,7 @@ router.post('/parse', async (req, res) => {
     const resolvedTimezone = typeof timezone === 'string' && timezone.trim() ? timezone.trim() : 'Asia/Shanghai';
     const planHint = mode === 'log' ? false : isLikelyPlanText(text);
     const chatHint = isLikelyChatText(text);
+    const imageAttachments = sanitizeImageAttachments(attachments);
     const { recentContext, olderSummary } = buildRecentConversationArtifacts(context, 3);
     const sanitizedContextSummary = normalizeContextText(contextSummary, 320) || olderSummary;
     const contextPrompt = recentContext.length > 0
@@ -655,9 +710,15 @@ Rules:
             ? `Recent conversation context. Use it to understand references, pronouns, and follow-up questions, but classify only the latest user input.\n${contextPrompt}`
             : `最近对话上下文。请用它理解指代、省略和追问，但分类对象仍然只针对最新这句用户输入。\n${contextPrompt}`
         }] : []),
+        ...(imageAttachments.length > 0 ? [{
+          role: "system",
+          content: isEn
+            ? `The latest user message also includes ${imageAttachments.length} image attachment${imageAttachments.length > 1 ? 's' : ''}. Use the visual content together with the text.`
+            : `用户最新一条消息还附带了 ${imageAttachments.length} 张图片，请结合图片内容和文字一起理解。`
+        }] : []),
         {
           role: "user",
-          content: `请将以下输入解析为结构化 JSON： "${text}"`
+          content: buildParseUserContent(text, imageAttachments, isEn)
         }
       ],
       response_format: { type: "json_object" }
