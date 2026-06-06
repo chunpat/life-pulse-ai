@@ -71,9 +71,9 @@ DB_SYNC_MODE=safe
 # AI 模型配置，推荐后端走 MiniMax
 LLM_PROVIDER=minimax
 MINIMAX_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx
-MINIMAX_MODEL=MiniMax-M2.7
-MINIMAX_BASE_URL=https://api.minimaxi.com/anthropic
-MINIMAX_API_FORMAT=anthropic
+MINIMAX_MODEL=MiniMax-M3
+MINIMAX_BASE_URL=https://api.minimax.io/v1
+MINIMAX_API_FORMAT=openai
 ```
 
 > 如果需要临时切回 Qwen，可设置 `LLM_PROVIDER=qwen`，并配置 `DASHSCOPE_API_KEY`、`QWEN_MODEL`、`QWEN_ENABLE_THINKING=false`。

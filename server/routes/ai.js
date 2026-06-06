@@ -11,12 +11,12 @@ const qwenConfig = {
   model: process.env.QWEN_MODEL || 'qwen-plus',
   baseURL: process.env.QWEN_BASE_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1'
 };
-const minimaxBaseURL = (process.env.MINIMAX_BASE_URL || 'https://api.minimaxi.com/anthropic').replace(/\/+$/, '');
+const minimaxBaseURL = (process.env.MINIMAX_BASE_URL || 'https://api.minimax.io/v1').replace(/\/+$/, '');
 const minimaxConfig = {
   provider: 'minimax',
   apiFormat: String(process.env.MINIMAX_API_FORMAT || (minimaxBaseURL.includes('/anthropic') ? 'anthropic' : 'openai')).toLowerCase(),
   apiKey: process.env.MINIMAX_API_KEY,
-  model: process.env.MINIMAX_MODEL || 'MiniMax-M2.7',
+  model: process.env.MINIMAX_MODEL || 'MiniMax-M3',
   baseURL: minimaxBaseURL
 };
 const llmConfig = llmProvider === 'minimax' ? minimaxConfig : qwenConfig;
@@ -64,6 +64,27 @@ function contentToText(content) {
     })
     .filter(Boolean)
     .join('\n');
+}
+
+function isMiniMaxM3(model) {
+  return String(model || '').toLowerCase().startsWith('minimax-m3');
+}
+
+function normalizeOpenAiCompatibleMessages(messages) {
+  if (llmConfig.provider !== 'minimax' || isMiniMaxM3(llmConfig.model)) {
+    return messages;
+  }
+
+  return (messages || []).map((message) => {
+    if (!message || typeof message !== 'object' || typeof message.content === 'string') {
+      return message;
+    }
+
+    return {
+      ...message,
+      content: contentToText(message.content)
+    };
+  });
 }
 
 function toAnthropicContentBlocks(content) {
@@ -212,11 +233,19 @@ async function createAnthropicChatCompletion(payload) {
 function createOpenAiCompatibleChatCompletion(payload) {
   const request = {
     model: llmConfig.model,
-    ...payload
+    ...payload,
+    messages: normalizeOpenAiCompatibleMessages(payload.messages)
   };
 
   if (llmConfig.provider === 'qwen' && supportsThinkingToggle(llmConfig.model)) {
     request.enable_thinking = enableThinking;
+  }
+
+  if (llmConfig.provider === 'minimax' && !minimaxEnableThinking) {
+    request.extra_body = {
+      ...(request.extra_body || {}),
+      thinking: { type: 'disabled' }
+    };
   }
 
   return openAiCompatibleClient.chat.completions.create(request);

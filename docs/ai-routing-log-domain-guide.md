@@ -186,6 +186,14 @@
 
 MiniMax 支持 Anthropic-compatible 和 OpenAI-compatible 两种配置。当前 `MINIMAX_BASE_URL` 如果包含 `/anthropic`，会走 Anthropic-compatible 适配；否则可以按 OpenAI-compatible 方式配置。
 
+如果需要解析图片，推荐使用：
+
+- `MINIMAX_MODEL=MiniMax-M3`
+- `MINIMAX_BASE_URL=https://api.minimax.io/v1`
+- `MINIMAX_API_FORMAT=openai`
+
+Anthropic-compatible 目前按文本接口处理，图片会被降级为附件提示。
+
 当前 `QWEN_ENABLE_THINKING` 只在支持的 Qwen 模型上透传。
 
 重点：不要把模型密钥、供应商 Base URL 或 thinking 开关挪到前端。
