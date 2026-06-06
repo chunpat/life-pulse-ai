@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { parseLifeLog, getSmartSuggestions, normalizeSmartSuggestion, ParseContextMessage, SmartSuggestion } from '../services/qwenService';
 import { createFinanceRecord, deleteFinanceRecordsByLogId } from '../services/financeService';
 import { storageService } from '../services/storageService';
-import { runtimeConfig } from '../services/runtimeConfig';
+import { buildApiUrl, runtimeConfig } from '../services/runtimeConfig';
 import { ChatAttachment, ChatMessage, Goal, GoalCreateInput, LogEntry, ParseResult, Plan, PlanCreateInput, PlanParseResult, RewardProfile } from '../types';
 import { buildSafeAreaInsetStyle, buildSafeAreaPaddingStyle } from '../utils/safeArea';
 import { formatMessageTime, shouldShowTimeLabel } from '../utils/formatMessageTime';
@@ -369,6 +369,8 @@ const Logger: React.FC<LoggerProps> = ({
   const shouldSubmitVoiceOnEndRef = useRef(false);
   const voiceModeReadyAtRef = useRef(0);
   const lastVoiceTouchStartAtRef = useRef(0);
+  const isWeChatRecordingRef = useRef(false);
+  const shouldStopWeChatOnStartRef = useRef(false);
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
   const drawerHeaderSafeStyle = buildSafeAreaPaddingStyle({ top: '1rem', right: '1.25rem', left: '1.25rem' });
@@ -482,8 +484,64 @@ const Logger: React.FC<LoggerProps> = ({
     const ua = window.navigator.userAgent.toLowerCase();
     const inWeChat = /micromessenger/.test(ua);
     setIsWeChat(inWeChat);
-    setWxReady(Boolean(inWeChat && (window as any).wx));
   }, []);
+
+  useEffect(() => {
+    if (!isWeChat) return;
+
+    const wx = (window as any).wx;
+    if (!wx || typeof wx.config !== 'function') {
+      setWxReady(false);
+      return;
+    }
+
+    let cancelled = false;
+    const configWechatSdk = async () => {
+      try {
+        const signUrl = window.location.href.split('#')[0];
+        const response = await fetch(buildApiUrl(`/api/wechat/config?url=${encodeURIComponent(signUrl)}`));
+        const config = await response.json();
+
+        if (cancelled || !config.enabled) {
+          setWxReady(false);
+          return;
+        }
+
+        wx.config({
+          debug: false,
+          appId: config.appId,
+          timestamp: config.timestamp,
+          nonceStr: config.nonceStr,
+          signature: config.signature,
+          jsApiList: ['startRecord', 'stopRecord', 'onVoiceRecordEnd', 'translateVoice']
+        });
+
+        wx.ready(() => {
+          if (!cancelled) {
+            setWxReady(true);
+          }
+        });
+
+        wx.error((error: unknown) => {
+          console.error('WeChat JS-SDK config failed', error);
+          if (!cancelled) {
+            setWxReady(false);
+          }
+        });
+      } catch (error) {
+        console.error('WeChat JS-SDK config failed', error);
+        if (!cancelled) {
+          setWxReady(false);
+        }
+      }
+    };
+
+    void configWechatSdk();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isWeChat]);
 
   useEffect(() => {
     if (isWeChat) return;
@@ -919,18 +977,22 @@ const Logger: React.FC<LoggerProps> = ({
 
     if (isWeChat) {
       const wx = (window as any).wx;
-      if (!wx) {
+      if (!wx || !wxReady) {
         setVoiceErrorType('unsupported');
         showNotice(t('logger.wechat_hint'), 'error');
         return;
       }
 
+      isWeChatRecordingRef.current = false;
+      shouldStopWeChatOnStartRef.current = false;
       setIsListening(true);
       wx.startRecord({
         success: () => {
+          isWeChatRecordingRef.current = true;
           wx.onVoiceRecordEnd({
             complete: (res: any) => {
               const localId = res.localId;
+              isWeChatRecordingRef.current = false;
               setIsListening(false);
               wx.translateVoice({
                 localId,
@@ -946,13 +1008,22 @@ const Logger: React.FC<LoggerProps> = ({
               });
             }
           });
+
+          if (shouldStopWeChatOnStartRef.current) {
+            shouldStopWeChatOnStartRef.current = false;
+            stopVoiceInputAndSubmit();
+          }
         },
         cancel: () => {
+          isWeChatRecordingRef.current = false;
+          shouldStopWeChatOnStartRef.current = false;
           setIsListening(false);
           showNotice('您拒绝了授权录音', 'error');
         },
         fail: (error: any) => {
           console.error('Start record failed', error);
+          isWeChatRecordingRef.current = false;
+          shouldStopWeChatOnStartRef.current = false;
           setIsListening(false);
           setVoiceErrorType('permission');
         }
@@ -983,18 +1054,28 @@ const Logger: React.FC<LoggerProps> = ({
     event?.preventDefault();
     event?.stopPropagation();
 
-    if (!isListening || isProcessing) return;
+    if (isProcessing) return;
+    if (!isListening && !isWeChatRecordingRef.current) return;
 
     if (isWeChat) {
       const wx = (window as any).wx;
-      if (!wx) {
+      if (!wx || !wxReady) {
+        isWeChatRecordingRef.current = false;
+        shouldStopWeChatOnStartRef.current = false;
         setIsListening(false);
+        return;
+      }
+
+      if (!isWeChatRecordingRef.current) {
+        shouldStopWeChatOnStartRef.current = true;
         return;
       }
 
       wx.stopRecord({
         success: (res: any) => {
           const localId = res.localId;
+          isWeChatRecordingRef.current = false;
+          shouldStopWeChatOnStartRef.current = false;
           setIsListening(false);
           wx.translateVoice({
             localId,
@@ -1014,6 +1095,8 @@ const Logger: React.FC<LoggerProps> = ({
         },
         fail: (error: any) => {
           console.error('Stop record failed', error);
+          isWeChatRecordingRef.current = false;
+          shouldStopWeChatOnStartRef.current = false;
           setIsListening(false);
         }
       });

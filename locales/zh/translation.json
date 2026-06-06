@@ -416,6 +416,8 @@
     "record_add_keep_tools": "完整添加入口",
     "record_add_keep_tools_desc": "原先弹窗里的定位、图片补充和完整编辑能力，统一保留在这里。",
     "record_add_location_action": "获取并附加定位",
+    "record_stream_open": "打开最近记录时间线",
+    "record_stream_tab": "记录",
     "image_upload_requires_login": "登录后才能上传图片",
     "image_attachment_hint": "已添加 {{count}} 张图片。可以补一句话，也可以直接发送。",
     "image_only_message": "发送了 {{count}} 张图片",

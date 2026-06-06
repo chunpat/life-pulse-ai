@@ -416,6 +416,8 @@
     "record_add_keep_tools": "Full add entry",
     "record_add_keep_tools_desc": "The original modal tools for location, images, and full editing are preserved here.",
     "record_add_location_action": "Get and attach location",
+    "record_stream_open": "Open recent record timeline",
+    "record_stream_tab": "Records",
     "image_upload_requires_login": "Sign in to upload images",
     "image_attachment_hint": "Added {{count}} image attachment(s). You can add a note or send them directly.",
     "image_only_message": "Sent {{count}} image attachment(s)",
