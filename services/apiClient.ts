@@ -2,6 +2,9 @@
 import { buildApiUrl } from './runtimeConfig';
 
 const TOKEN_KEY = 'lifepulse_token';
+const USER_KEY = 'guest_user_v1';
+
+let lastUnauthorizedToken: string | null = null;
 
 interface RequestOptions extends RequestInit {
   params?: Record<string, string>;
@@ -42,9 +45,13 @@ export const apiClient = async (endpoint: string, options: RequestOptions = {}) 
 
     if (response.status === 401 || response.status === 403) {
       // Token 过期或无效 (401: Unauthorized, 403: Forbidden - sometimes used for expired tokens)
+      const expiredToken = token;
       localStorage.removeItem(TOKEN_KEY);
-      localStorage.removeItem('guest_user_v1'); // 同时也清除用户信息
-      window.dispatchEvent(new CustomEvent('unauthorized'));
+      localStorage.removeItem(USER_KEY); // 同时也清除用户信息
+      if (expiredToken && lastUnauthorizedToken !== expiredToken) {
+        lastUnauthorizedToken = expiredToken;
+        window.dispatchEvent(new CustomEvent('unauthorized'));
+      }
       throw new Error('登录已过期，请重新登录');
     }
 

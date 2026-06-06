@@ -44,6 +44,7 @@ const App: React.FC = () => {
   const [loggerSidebarTab, setLoggerSidebarTab] = useState<'goals' | 'record-add'>('goals');
   const lastAnalyzedFingerprint = React.useRef<string>('');
   const hasFlushedPlanDeleteQueue = React.useRef(false);
+  const hasHandledUnauthorized = React.useRef(false);
 
   // 初始化用户状态
   useEffect(() => {
@@ -54,6 +55,8 @@ const App: React.FC = () => {
     }
 
     const handleUnauthorized = () => {
+      if (hasHandledUnauthorized.current) return;
+      hasHandledUnauthorized.current = true;
       handleLogout();
       alert('登录已过期，请重新登录');
     };
@@ -100,6 +103,7 @@ const App: React.FC = () => {
   }, [user]);
 
   const handleLogin = async (newUser: User, token?: string) => {
+    hasHandledUnauthorized.current = false;
     setUser(newUser);
     localStorage.setItem(GUEST_STORAGE_USER, JSON.stringify(newUser));
     if (token) {
@@ -128,6 +132,7 @@ const App: React.FC = () => {
   };
 
   const handleGuestMode = () => {
+    hasHandledUnauthorized.current = false;
     const guestUser: User = {
       id: 'guest_local',
       name: '游客', // Simplified to '游客' to match translation key logic in Layout.tsx

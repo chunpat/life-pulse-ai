@@ -367,6 +367,8 @@ const Logger: React.FC<LoggerProps> = ({
   const voiceDraftRef = useRef('');
   const shouldRestartListeningRef = useRef(false);
   const shouldSubmitVoiceOnEndRef = useRef(false);
+  const voiceModeReadyAtRef = useRef(0);
+  const lastVoiceTouchStartAtRef = useRef(0);
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
   const drawerHeaderSafeStyle = buildSafeAreaPaddingStyle({ top: '1rem', right: '1.25rem', left: '1.25rem' });
@@ -896,6 +898,14 @@ const Logger: React.FC<LoggerProps> = ({
     event?.preventDefault();
     event?.stopPropagation();
 
+    const now = Date.now();
+    if (now < voiceModeReadyAtRef.current) return;
+    if (event?.type === 'touchstart') {
+      lastVoiceTouchStartAtRef.current = now;
+    } else if (event?.type === 'mousedown' && now - lastVoiceTouchStartAtRef.current < 500) {
+      return;
+    }
+
     if (isListening || isProcessing) return;
 
     setVoiceErrorType(null);
@@ -1064,7 +1074,10 @@ const Logger: React.FC<LoggerProps> = ({
     focusInlineInputFromUserGesture(event, inlineInputRef.current);
   };
 
-  const handleSwitchToVoiceInput = () => {
+  const handleSwitchToVoiceInput = (event?: React.MouseEvent<HTMLButtonElement>) => {
+    event?.preventDefault();
+    event?.stopPropagation();
+
     if (uploadedImages.length > 0) {
       showNotice(t('logger.image_voice_blocked', '有待发送图片时，请直接输入文字或点击发送'), 'info');
       return;
@@ -1072,6 +1085,7 @@ const Logger: React.FC<LoggerProps> = ({
 
     inlineInputRef.current?.blur();
     textareaRef.current?.blur();
+    voiceModeReadyAtRef.current = Date.now() + 300;
     setShowInlineKeyboard(false);
   };
 
