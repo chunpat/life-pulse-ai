@@ -30,13 +30,9 @@ const app = express();
 // Middleware
 app.use(cors()); // 最基础的配置，允许所有
 app.use(express.json());
-app.use(morgan('dev'));
-
-// 日志记录中间件，用于调试 403
-app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
-  next();
-});
+if (process.env.DEBUG_REQUESTS === 'true') {
+  app.use(morgan('dev'));
+}
 
 // Routes
 const authRoutes = require('./routes/auth');

@@ -165,15 +165,28 @@
 
 ## 10. 模型配置现状
 
-后端当前通过 DashScope OpenAI 兼容接口调用通义千问。
+后端当前在 `server/routes/ai.js` 里通过通用 LLM 适配层调用模型。
+
+默认选择规则：
+
+- 如果设置了 `LLM_PROVIDER`，按该值选择
+- 如果未设置 `LLM_PROVIDER` 但存在 `MINIMAX_API_KEY`，默认走 MiniMax
+- 否则回退到 Qwen / DashScope
 
 关键环境变量：
 
+- `LLM_PROVIDER`
+- `MINIMAX_API_KEY`
+- `MINIMAX_MODEL`
+- `MINIMAX_BASE_URL`
+- `MINIMAX_API_FORMAT`
 - `DASHSCOPE_API_KEY`
 - `QWEN_MODEL`
 - `QWEN_ENABLE_THINKING`
 
-当前 `QWEN_ENABLE_THINKING` 只在支持的模型上透传。
+MiniMax 支持 Anthropic-compatible 和 OpenAI-compatible 两种配置。当前 `MINIMAX_BASE_URL` 如果包含 `/anthropic`，会走 Anthropic-compatible 适配；否则可以按 OpenAI-compatible 方式配置。
+
+当前 `QWEN_ENABLE_THINKING` 只在支持的 Qwen 模型上透传。
 
 重点：不要把模型密钥、供应商 Base URL 或 thinking 开关挪到前端。
 

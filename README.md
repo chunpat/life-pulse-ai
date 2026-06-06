@@ -29,7 +29,7 @@
 | 前端 | React 19 + TypeScript + Vite + Tailwind CSS + Recharts |
 | 后端 | Node.js + Express + Sequelize ORM |
 | 数据库 | MySQL 8.x（支持 SQLite 回退） |
-| AI | 阿里云通义千问 (Qwen)，通过后端代理调用，确保 API Key 不被泄露 |
+| AI | MiniMax / Qwen 可配置，通过后端代理调用，确保 API Key 不被泄露 |
 | 移动端 | Capacitor 7 + 自定义 iOS 插件 (EventKit 同步) |
 | 国际化 | i18next (中 / 英) |
 
@@ -68,13 +68,15 @@ DB_PASS=你的数据库密码
 DB_NAME=lifepulse_db
 DB_SYNC_MODE=safe
 
-# 阿里云通义千问 API Key
-DASHSCOPE_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx
-QWEN_MODEL=qwen-plus
-QWEN_ENABLE_THINKING=false
+# AI 模型配置，推荐后端走 MiniMax
+LLM_PROVIDER=minimax
+MINIMAX_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx
+MINIMAX_MODEL=MiniMax-M2.7
+MINIMAX_BASE_URL=https://api.minimaxi.com/anthropic
+MINIMAX_API_FORMAT=anthropic
 ```
 
-> `qwen3.5-plus` 这类混合思考模型默认会先思考再回答。建议保持 `QWEN_ENABLE_THINKING=false`，能明显降低返回延迟。
+> 如果需要临时切回 Qwen，可设置 `LLM_PROVIDER=qwen`，并配置 `DASHSCOPE_API_KEY`、`QWEN_MODEL`、`QWEN_ENABLE_THINKING=false`。
 >
 > 数据库启动建议使用 `DB_SYNC_MODE=safe`。只有在明确要让 Sequelize 自动修改表结构时，才临时改成 `alter`，否则 MySQL 上可能重复堆叠唯一索引。
 

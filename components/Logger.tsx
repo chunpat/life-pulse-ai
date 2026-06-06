@@ -355,6 +355,7 @@ const Logger: React.FC<LoggerProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const inlineInputRef = useRef<HTMLInputElement>(null);
+  const isComposerOpenRef = useRef(isComposerOpen);
   const chatLoadTopRef = useRef<HTMLDivElement>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const chatScrollRootRef = useRef<HTMLElement | null>(null);
@@ -366,7 +367,7 @@ const Logger: React.FC<LoggerProps> = ({
   const voiceTranscriptRef = useRef('');
   const voiceDraftRef = useRef('');
   const shouldRestartListeningRef = useRef(false);
-  const shouldSubmitVoiceOnEndRef = useRef(false);
+  const shouldApplyVoiceTextOnEndRef = useRef(false);
   const voiceModeReadyAtRef = useRef(0);
   const lastVoiceTouchStartAtRef = useRef(0);
   const isWeChatRecordingRef = useRef(false);
@@ -418,6 +419,27 @@ const Logger: React.FC<LoggerProps> = ({
   const activeSuggestionKey = getSuggestionKey(suggestion);
   const shouldShowFloatingSuggestion = Boolean(suggestion?.content.trim()) && activeSuggestionKey !== dismissedSuggestionKey && !isComposerOpen;
   const inlineComposerVisible = showInlineKeyboard || uploadedImages.length > 0;
+  const voiceReleaseLabel = i18n.language.startsWith('zh') ? '松开转文字' : 'Release to text';
+
+  const applyVoiceTranscriptToInput = (transcript: string) => {
+    const cleanedText = transcript.replace(/[。，？！]$/, '').trim();
+    if (!cleanedText) return;
+
+    setInputText(cleanedText);
+    setDraftParse(null);
+
+    if (!isComposerOpenRef.current) {
+      setShowInlineKeyboard(true);
+    }
+
+    window.setTimeout(() => {
+      focusTextControl(isComposerOpenRef.current ? textareaRef.current : inlineInputRef.current);
+    }, 80);
+  };
+
+  useEffect(() => {
+    isComposerOpenRef.current = isComposerOpen;
+  }, [isComposerOpen]);
 
   useEffect(() => {
     if (!sidebarOpenRequestKey) return;
@@ -586,7 +608,7 @@ const Logger: React.FC<LoggerProps> = ({
 
     recognition.onerror = (event: any) => {
       shouldRestartListeningRef.current = false;
-      shouldSubmitVoiceOnEndRef.current = false;
+      shouldApplyVoiceTextOnEndRef.current = false;
       if (event?.error === 'not-allowed' || event?.error === 'service-not-allowed') {
         setVoiceErrorType('permission');
       } else if (event?.error === 'language-not-supported') {
@@ -606,16 +628,15 @@ const Logger: React.FC<LoggerProps> = ({
       }
 
       const finalTranscript = voiceDraftRef.current.trim();
-      const shouldSubmit = shouldSubmitVoiceOnEndRef.current;
-      shouldSubmitVoiceOnEndRef.current = false;
+      const shouldApplyVoiceText = shouldApplyVoiceTextOnEndRef.current;
+      shouldApplyVoiceTextOnEndRef.current = false;
       shouldRestartListeningRef.current = false;
       setIsListening(false);
 
-      if (shouldSubmit && finalTranscript) {
+      if (shouldApplyVoiceText && finalTranscript) {
         voiceTranscriptRef.current = '';
         voiceDraftRef.current = '';
-        const cleanedText = finalTranscript.replace(/[。，？！]$/, '');
-        void analyzeTextInput(cleanedText);
+        applyVoiceTranscriptToInput(finalTranscript);
         return;
       }
 
@@ -973,7 +994,7 @@ const Logger: React.FC<LoggerProps> = ({
     setInputText('');
     voiceTranscriptRef.current = '';
     voiceDraftRef.current = '';
-    shouldSubmitVoiceOnEndRef.current = false;
+    shouldApplyVoiceTextOnEndRef.current = false;
 
     if (isWeChat) {
       const wx = (window as any).wx;
@@ -1000,9 +1021,7 @@ const Logger: React.FC<LoggerProps> = ({
                 success: (response: any) => {
                   const text = response.translateResult;
                   if (text) {
-                    const cleanedText = text.replace(/[。，？！]$/, '');
-                    setInputText(cleanedText);
-                    void analyzeTextInput(cleanedText);
+                    applyVoiceTranscriptToInput(text);
                   }
                 }
               });
@@ -1083,9 +1102,7 @@ const Logger: React.FC<LoggerProps> = ({
             success: (response: any) => {
               const text = response.translateResult;
               if (text) {
-                const cleanedText = text.replace(/[。，？！]$/, '');
-                setInputText(cleanedText);
-                void analyzeTextInput(cleanedText);
+                applyVoiceTranscriptToInput(text);
               }
             },
             fail: (error: any) => {
@@ -1104,7 +1121,7 @@ const Logger: React.FC<LoggerProps> = ({
     }
 
     shouldRestartListeningRef.current = false;
-    shouldSubmitVoiceOnEndRef.current = true;
+    shouldApplyVoiceTextOnEndRef.current = true;
     recognitionRef.current?.stop();
   };
 
@@ -2078,11 +2095,11 @@ const Logger: React.FC<LoggerProps> = ({
                       {i18n.language.startsWith('zh') ? '正在录音' : 'Listening'}
                     </p>
                     <p className="mt-1 text-sm leading-relaxed text-slate-700">
-                      {inputText || (i18n.language.startsWith('zh') ? '请继续说，松开发送。' : 'Keep speaking, release to send.')}
+                      {inputText || (i18n.language.startsWith('zh') ? '请继续说，松开后可修改文字。' : 'Keep speaking, release to edit the text.')}
                     </p>
                   </div>
                   <span className="shrink-0 rounded-full bg-white px-3 py-1 text-[11px] font-bold text-red-500 ring-1 ring-red-100">
-                    {i18n.language.startsWith('zh') ? '松开发送' : 'Release to send'}
+                    {voiceReleaseLabel}
                   </span>
                 </div>
               </div>
@@ -2145,7 +2162,7 @@ const Logger: React.FC<LoggerProps> = ({
                   className={`flex-1 rounded-full px-5 py-3 text-sm font-bold transition-colors touch-none select-none ${isListening ? 'bg-red-500 text-white' : 'bg-amber-500 text-white hover:bg-amber-400'}`}
                 >
                   {isListening
-                    ? (i18n.language.startsWith('zh') ? '松开发送' : 'Release to send')
+                    ? voiceReleaseLabel
                     : (i18n.language.startsWith('zh') ? '按住说话' : 'Hold to talk')}
                 </button>
               )}
@@ -2328,7 +2345,7 @@ const Logger: React.FC<LoggerProps> = ({
                             ? 'bg-red-50 text-red-400' 
                             : 'bg-white text-slate-500 hover:text-amber-700 hover:bg-white shadow-sm border border-slate-100'
                       }`}
-                      title={isListening ? (i18n.language.startsWith('zh') ? '松开发送' : 'Release to send') : (i18n.language.startsWith('zh') ? '按住说话' : 'Hold to talk')}
+                      title={isListening ? voiceReleaseLabel : (i18n.language.startsWith('zh') ? '按住说话' : 'Hold to talk')}
                     >
                       <svg className="w-5 h-5 flex-none" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/><path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
                     </button>

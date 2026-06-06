@@ -3,10 +3,28 @@ const router = express.Router();
 const OpenAI = require('openai');
 const authenticateToken = require('../middleware/auth');
 
-const apiKey = process.env.DASHSCOPE_API_KEY;
-const modelName = process.env.QWEN_MODEL || 'qwen-plus';
+const llmProvider = String(process.env.LLM_PROVIDER || (process.env.MINIMAX_API_KEY ? 'minimax' : 'qwen')).toLowerCase();
+const qwenConfig = {
+  provider: 'qwen',
+  apiFormat: 'openai',
+  apiKey: process.env.DASHSCOPE_API_KEY,
+  model: process.env.QWEN_MODEL || 'qwen-plus',
+  baseURL: process.env.QWEN_BASE_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+};
+const minimaxBaseURL = (process.env.MINIMAX_BASE_URL || 'https://api.minimaxi.com/anthropic').replace(/\/+$/, '');
+const minimaxConfig = {
+  provider: 'minimax',
+  apiFormat: String(process.env.MINIMAX_API_FORMAT || (minimaxBaseURL.includes('/anthropic') ? 'anthropic' : 'openai')).toLowerCase(),
+  apiKey: process.env.MINIMAX_API_KEY,
+  model: process.env.MINIMAX_MODEL || 'MiniMax-M2.7',
+  baseURL: minimaxBaseURL
+};
+const llmConfig = llmProvider === 'minimax' ? minimaxConfig : qwenConfig;
+const apiKey = llmConfig.apiKey;
 const enableThinking = String(process.env.QWEN_ENABLE_THINKING || 'false').toLowerCase() === 'true';
 const enableMultimodal = String(process.env.QWEN_ENABLE_MULTIMODAL || 'true').toLowerCase() !== 'false';
+const minimaxMaxTokens = Number(process.env.MINIMAX_MAX_TOKENS || 4096);
+const minimaxEnableThinking = String(process.env.MINIMAX_ENABLE_THINKING || 'false').toLowerCase() === 'true';
 
 const THINKING_TOGGLE_MODELS = [
   'qwen3.5-plus',
@@ -17,26 +35,199 @@ const THINKING_TOGGLE_MODELS = [
   'qwq-plus'
 ];
 
-const client = new OpenAI({
-  apiKey: apiKey,
-  baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-});
+const openAiCompatibleClient = llmConfig.apiFormat === 'openai'
+  ? new OpenAI({
+      apiKey: apiKey,
+      baseURL: llmConfig.baseURL,
+    })
+  : null;
 
 function supportsThinkingToggle(model) {
   return THINKING_TOGGLE_MODELS.some((candidate) => model.startsWith(candidate));
 }
 
-function createChatCompletion(payload) {
+function contentToText(content) {
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  if (!Array.isArray(content)) {
+    return '';
+  }
+
+  return content
+    .map((item) => {
+      if (!item || typeof item !== 'object') return '';
+      if (item.type === 'text') return item.text || '';
+      if (item.type === 'image_url') return '[image attachment]';
+      return '';
+    })
+    .filter(Boolean)
+    .join('\n');
+}
+
+function toAnthropicContentBlocks(content) {
+  if (typeof content === 'string') {
+    return [{ type: 'text', text: content }];
+  }
+
+  if (!Array.isArray(content)) {
+    return [{ type: 'text', text: String(content || '') }];
+  }
+
+  const blocks = [];
+  for (const item of content) {
+    if (!item || typeof item !== 'object') continue;
+
+    if (item.type === 'text' && item.text) {
+      blocks.push({ type: 'text', text: item.text });
+      continue;
+    }
+
+    const imageUrl = item.type === 'image_url' && typeof item.image_url?.url === 'string'
+      ? item.image_url.url
+      : '';
+    if (imageUrl) {
+      blocks.push({
+        type: 'text',
+        text: '[image attachment omitted: MiniMax Anthropic-compatible API does not support image input yet]'
+      });
+    }
+  }
+
+  return blocks.length > 0 ? blocks : [{ type: 'text', text: '' }];
+}
+
+function buildAnthropicRequest(payload) {
+  const systemParts = [];
+  const messages = [];
+
+  for (const message of payload.messages || []) {
+    if (!message || typeof message !== 'object') continue;
+
+    if (message.role === 'system') {
+      const text = contentToText(message.content);
+      if (text) systemParts.push(text);
+      continue;
+    }
+
+    if (message.role === 'user' || message.role === 'assistant') {
+      messages.push({
+        role: message.role,
+        content: toAnthropicContentBlocks(message.content)
+      });
+    }
+  }
+
+  if (payload.response_format?.type === 'json_object') {
+    systemParts.push('Return only a valid JSON object. Do not include Markdown fences, explanations, or extra text.');
+  }
+
   const request = {
-    model: modelName,
+    model: llmConfig.model,
+    max_tokens: Number.isFinite(minimaxMaxTokens) && minimaxMaxTokens > 0 ? minimaxMaxTokens : 4096,
+    messages
+  };
+
+  if (systemParts.length > 0) {
+    request.system = systemParts.join('\n\n');
+  }
+
+  if (typeof payload.temperature === 'number') {
+    request.temperature = payload.temperature;
+  }
+
+  if (typeof payload.top_p === 'number') {
+    request.top_p = payload.top_p;
+  }
+
+  if (!minimaxEnableThinking) {
+    request.thinking = { type: 'disabled' };
+  }
+
+  return request;
+}
+
+function getAnthropicMessagesUrl(baseURL) {
+  if (/\/v1$/i.test(baseURL)) return `${baseURL}/messages`;
+  return `${baseURL}/v1/messages`;
+}
+
+function extractAnthropicText(responseData) {
+  if (typeof responseData?.content === 'string') {
+    return responseData.content;
+  }
+
+  if (!Array.isArray(responseData?.content)) {
+    return '';
+  }
+
+  return responseData.content
+    .filter((block) => block && block.type === 'text' && typeof block.text === 'string')
+    .map((block) => block.text)
+    .join('\n')
+    .trim();
+}
+
+async function createAnthropicChatCompletion(payload) {
+  const response = await fetch(getAnthropicMessagesUrl(llmConfig.baseURL), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${llmConfig.apiKey}`,
+      'x-api-key': llmConfig.apiKey,
+      'anthropic-version': '2023-06-01'
+    },
+    body: JSON.stringify(buildAnthropicRequest(payload))
+  });
+
+  const responseText = await response.text();
+  let responseData = {};
+  if (responseText) {
+    try {
+      responseData = JSON.parse(responseText);
+    } catch (error) {
+      responseData = {};
+    }
+  }
+
+  if (!response.ok) {
+    const message = responseData?.error?.message || responseData?.message || responseText || 'MiniMax API request failed';
+    throw new Error(message);
+  }
+
+  return {
+    choices: [
+      {
+        message: {
+          content: extractAnthropicText(responseData)
+        }
+      }
+    ],
+    model: responseData.model,
+    usage: responseData.usage
+  };
+}
+
+function createOpenAiCompatibleChatCompletion(payload) {
+  const request = {
+    model: llmConfig.model,
     ...payload
   };
 
-  if (supportsThinkingToggle(modelName)) {
+  if (llmConfig.provider === 'qwen' && supportsThinkingToggle(llmConfig.model)) {
     request.enable_thinking = enableThinking;
   }
 
-  return client.chat.completions.create(request);
+  return openAiCompatibleClient.chat.completions.create(request);
+}
+
+function createChatCompletion(payload) {
+  if (llmConfig.apiFormat === 'anthropic') {
+    return createAnthropicChatCompletion(payload);
+  }
+
+  return createOpenAiCompatibleChatCompletion(payload);
 }
 
 function getPlanHeuristicProfile(text) {
@@ -588,8 +779,6 @@ router.post('/parse', async (req, res) => {
     // 只要包含 zh 就认为是中文，否则如果包含 en 认为是英文，默认中文
     const reqLang = lang || req.headers['accept-language'] || 'zh';
     const isEn = !reqLang.toLowerCase().includes('zh') && reqLang.toLowerCase().includes('en');
-
-    console.log(`AI Parse - Input: ${text.substring(0, 20)}... | Lang param: ${lang} | Header: ${req.headers['accept-language']} | Resolved Lang: ${reqLang} | isEn: ${isEn}`);
 
     const now = new Date();
     const resolvedTimezone = typeof timezone === 'string' && timezone.trim() ? timezone.trim() : 'Asia/Shanghai';

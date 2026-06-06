@@ -110,8 +110,6 @@ router.get('/reverse-geocode', async (req, res) => {
         clearTimeout(timeoutId);
 
         const text = await response.text();
-        console.warn('使用天地图请求结果',text);
-
         
         // 天地图限流或未认证时常返回 HTML 错误页，此时 text 以 < 开头
         if (text.trim().startsWith('<')) {
