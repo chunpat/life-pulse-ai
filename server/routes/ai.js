@@ -190,6 +190,81 @@ function extractAnthropicText(responseData) {
     .trim();
 }
 
+function stripModelThinkingText(value) {
+  return String(value || '')
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .trim();
+}
+
+function extractJsonObjectText(value) {
+  const text = stripModelThinkingText(value)
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+
+  if (!text) {
+    throw new Error('AI 返回为空，无法解析 JSON');
+  }
+
+  if (text.startsWith('{') && text.endsWith('}')) {
+    return text;
+  }
+
+  const start = text.indexOf('{');
+  if (start < 0) {
+    throw new Error('AI 返回中未找到 JSON 对象');
+  }
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = start; index < text.length; index += 1) {
+    const char = text[index];
+
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      escaped = true;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) {
+      continue;
+    }
+
+    if (char === '{') {
+      depth += 1;
+    } else if (char === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return text.slice(start, index + 1);
+      }
+    }
+  }
+
+  throw new Error('AI 返回中的 JSON 对象不完整');
+}
+
+function parseJsonObjectFromModelText(value, fallback = null) {
+  try {
+    return JSON.parse(extractJsonObjectText(value));
+  } catch (error) {
+    if (fallback !== null) {
+      return fallback;
+    }
+    throw error;
+  }
+}
+
 async function createAnthropicChatCompletion(payload) {
   const response = await fetch(getAnthropicMessagesUrl(llmConfig.baseURL), {
     method: 'POST',
@@ -348,6 +423,45 @@ function sanitizeImageAttachments(attachments) {
       name: typeof item.name === 'string' && item.name.trim() ? item.name.trim() : undefined,
       mimeType: typeof item.mimeType === 'string' && item.mimeType.trim() ? item.mimeType.trim() : undefined
     }));
+}
+
+async function inlineImageAttachmentsForMiniMax(attachments) {
+  if (llmConfig.provider !== 'minimax' || llmConfig.apiFormat !== 'openai' || !isMiniMaxM3(llmConfig.model)) {
+    return attachments;
+  }
+
+  const maxBytes = Number(process.env.MINIMAX_IMAGE_INLINE_MAX_BYTES || 5 * 1024 * 1024);
+
+  return Promise.all(attachments.map(async (attachment) => {
+    if (!/^https?:\/\//i.test(attachment.url)) {
+      return attachment;
+    }
+
+    try {
+      const response = await fetch(attachment.url);
+      if (!response.ok) {
+        return attachment;
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      if (arrayBuffer.byteLength > maxBytes) {
+        return attachment;
+      }
+
+      const mimeType = response.headers.get('content-type')?.split(';')[0]
+        || attachment.mimeType
+        || 'image/jpeg';
+      const base64 = Buffer.from(arrayBuffer).toString('base64');
+
+      return {
+        ...attachment,
+        mimeType,
+        url: `data:${mimeType};base64,${base64}`
+      };
+    } catch (error) {
+      return attachment;
+    }
+  }));
 }
 
 function buildAttachmentNote(attachments, isEn = false) {
@@ -813,7 +927,7 @@ router.post('/parse', async (req, res) => {
     const resolvedTimezone = typeof timezone === 'string' && timezone.trim() ? timezone.trim() : 'Asia/Shanghai';
     const planHint = mode === 'log' ? false : isLikelyPlanText(text);
     const chatHint = isLikelyChatText(text);
-    const imageAttachments = sanitizeImageAttachments(attachments);
+    const imageAttachments = await inlineImageAttachmentsForMiniMax(sanitizeImageAttachments(attachments));
     const { recentContext, olderSummary } = buildRecentConversationArtifacts(context, 3);
     const sanitizedContextSummary = normalizeContextText(contextSummary, 320) || olderSummary;
     const contextPrompt = recentContext.length > 0
@@ -942,7 +1056,7 @@ Rules:
       response_format: { type: "json_object" }
     });
 
-    const parsedData = JSON.parse(response.choices[0].message.content);
+    const parsedData = parseJsonObjectFromModelText(response.choices[0].message.content);
     const normalizedIntent = ['chat', 'log', 'plan', 'finance'].includes(parsedData.intent)
       ? parsedData.intent
       : (parsedData.plan ? 'plan' : parsedData.finance?.length ? 'finance' : chatHint ? 'chat' : 'log');
@@ -1062,7 +1176,8 @@ JSON 结构要求：
       response_format: { type: "json_object" }
     });
   
-    res.json({ insight: response.choices[0].message.content || "{}" });
+    const insightData = parseJsonObjectFromModelText(response.choices[0].message.content, { summary: '', bulletPoints: [] });
+    res.json({ insight: JSON.stringify(insightData) });
   } catch (error) {
     console.error("AI Insight Error:", error);
     res.status(500).json({ message: '生成洞察失败', error: error.message });
@@ -1155,7 +1270,7 @@ Return in JSON format:
     });
 
 
-    res.json(JSON.parse(response.choices[0].message.content || '{"suggestions": []}'));
+    res.json(parseJsonObjectFromModelText(response.choices[0].message.content, { suggestions: [] }));
 
   } catch (error) {
     console.error("AI Suggestion Error:", error);

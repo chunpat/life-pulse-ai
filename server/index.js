@@ -94,7 +94,6 @@ cleanupDuplicateUserUniqueIndexes(sequelize)
     console.log('Database connected and synced');
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server is running on http://0.0.0.0:${PORT}`);
-      console.log(`Try accessing http://127.0.0.1:${PORT}/ to verify`);
     });
   })
   .catch(err => {
