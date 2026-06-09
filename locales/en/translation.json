@@ -428,6 +428,8 @@
     "image_direct_action": "Go to preview",
     "image_describe_action": "Add a description",
     "image_direct_prompt": "I uploaded an image. Please turn it into a record first.",
+    "image_preview": "Image preview",
+    "view_image": "View image",
     "keyboard_mode_hint": "This input stays one-sentence only. Use the sidebar record-add entry for images, location, and richer editing.",
     "chat_assistant_intro": "I am your life assistant. Say one sentence and I will turn it into a money record, a life log, or a plan.",
     "loading_previous_messages": "Loading earlier messages...",

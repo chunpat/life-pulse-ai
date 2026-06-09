@@ -345,6 +345,7 @@ const Logger: React.FC<LoggerProps> = ({
   const [showShareOverlay, setShowShareOverlay] = useState(false);
   const [showGoalDrawer, setShowGoalDrawer] = useState(false);
   const [showTimelineDrawer, setShowTimelineDrawer] = useState(false);
+  const [selectedImagePreview, setSelectedImagePreview] = useState<ChatAttachment | null>(null);
   const [sidebarTab, setSidebarTab] = useState<'goals' | 'record-add'>('goals');
   const [composerMode, setComposerMode] = useState<'chat' | 'record-add'>('chat');
   const [showInlineKeyboard, setShowInlineKeyboard] = useState(false);
@@ -1554,7 +1555,6 @@ const Logger: React.FC<LoggerProps> = ({
       <input
         type="file"
         accept="image/*"
-        capture={isNativeIos ? undefined : 'environment'}
         multiple
         className="hidden"
         ref={fileInputRef}
@@ -1638,9 +1638,15 @@ const Logger: React.FC<LoggerProps> = ({
                       {attachments.length > 0 && (
                         <div className={`grid grid-cols-2 gap-2 ${message.content ? 'mb-3' : ''}`}>
                           {attachments.map((attachment, attachmentIndex) => (
-                            <div key={`${attachment.url}-${attachmentIndex}`} className="overflow-hidden rounded-2xl bg-white/70 ring-1 ring-black/5">
+                            <button
+                              type="button"
+                              key={`${attachment.url}-${attachmentIndex}`}
+                              onClick={() => setSelectedImagePreview(attachment)}
+                              className="overflow-hidden rounded-2xl bg-white/70 text-left ring-1 ring-black/5 transition-transform active:scale-[0.98]"
+                              aria-label={t('logger.view_image', '查看图片')}
+                            >
                               <img src={attachment.url} alt={attachment.name || 'Attachment'} className="h-28 w-full object-cover" />
-                            </div>
+                            </button>
                           ))}
                         </div>
                       )}
@@ -1844,7 +1850,14 @@ const Logger: React.FC<LoggerProps> = ({
                   <div className="grid grid-cols-3 gap-2">
                     {uploadedImages.map((attachment, idx) => (
                       <div key={`${attachment.url}-${idx}`} className="relative overflow-hidden rounded-xl bg-slate-100">
-                        <img src={attachment.url} alt={attachment.name || 'Uploaded'} className="h-24 w-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setSelectedImagePreview(attachment)}
+                          className="block w-full"
+                          aria-label={t('logger.view_image', '查看图片')}
+                        >
+                          <img src={attachment.url} alt={attachment.name || 'Uploaded'} className="h-24 w-full object-cover" />
+                        </button>
                         <button
                           type="button"
                           onClick={() => setUploadedImages((prev) => prev.filter((_, imageIndex) => imageIndex !== idx))}
@@ -2309,11 +2322,18 @@ const Logger: React.FC<LoggerProps> = ({
                   <div className="flex flex-wrap gap-2 mb-4 px-1">
                     {uploadedImages.map((attachment, idx) => (
                       <div key={idx} className="relative group w-14 h-14 rounded-xl overflow-hidden border border-slate-100 shadow-sm">
-                        <img src={attachment.url} alt={attachment.name || 'Uploaded'} className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setSelectedImagePreview(attachment)}
+                          className="block h-full w-full"
+                          aria-label={t('logger.view_image', '查看图片')}
+                        >
+                          <img src={attachment.url} alt={attachment.name || 'Uploaded'} className="w-full h-full object-cover" />
+                        </button>
                         <button
                           type="button"
                           onClick={() => setUploadedImages(prev => prev.filter((_, i) => i !== idx))}
-                          className="absolute inset-0 bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                          className="absolute right-1 top-1 rounded-full bg-black/55 p-1 text-white opacity-100 transition-colors hover:bg-black/70"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                         </button>
@@ -2532,6 +2552,34 @@ const Logger: React.FC<LoggerProps> = ({
               </button>
             </div>
           </div>
+        </div>
+      )}
+      {selectedImagePreview && (
+        <div
+          className="fixed inset-0 z-[130] flex items-center justify-center bg-black/90 p-4 animate-in fade-in duration-150"
+          style={centeredModalSafeStyle}
+          onClick={() => setSelectedImagePreview(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-label={selectedImagePreview.name || t('logger.image_preview', '图片预览')}
+        >
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              setSelectedImagePreview(null);
+            }}
+            className="absolute right-4 top-4 rounded-full bg-white/12 p-3 text-white ring-1 ring-white/20 transition-colors hover:bg-white/20"
+            aria-label={t('common.cancel', '关闭')}
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+          <img
+            src={selectedImagePreview.url}
+            alt={selectedImagePreview.name || t('logger.image_preview', '图片预览')}
+            className="max-h-[86vh] max-w-full rounded-2xl object-contain shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          />
         </div>
       )}
       </div>

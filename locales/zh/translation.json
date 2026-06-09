@@ -428,6 +428,8 @@
     "image_direct_action": "直接进入预览",
     "image_describe_action": "补一句描述",
     "image_direct_prompt": "我上传了一张图片，请先帮我整理成一条记录。",
+    "image_preview": "图片预览",
+    "view_image": "查看图片",
     "keyboard_mode_hint": "这里保留为一句话输入。图片、定位和完整补充请从侧边栏的记录添加进入。",
     "chat_assistant_intro": "我是你的生活助手。你可以直接说一句，我会帮你识别成记账、生活记录，或者计划安排。",
     "loading_previous_messages": "正在加载更早对话...",
